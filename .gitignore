@@ -1,1 +1,6 @@
+# Idea IDE
 .idea/
+
+# Virtual env
+venv/
+gcloud_env/
