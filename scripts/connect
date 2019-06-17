@@ -1,0 +1,1 @@
+gcloud compute ssh kdoran1 # --ssh-flag="-ServerAliveInterval=30"

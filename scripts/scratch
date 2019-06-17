@@ -1,0 +1,1 @@
+ssh -t 35.192.126.45 "du -hs /tmp/imagenet_temp_files/"

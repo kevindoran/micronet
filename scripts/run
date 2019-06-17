@@ -1,0 +1,6 @@
+export BUCKET_NAME=micronet_bucket1
+export MODEL_DIR=/mnist
+export DATA_DIR=$BUCKET_NAME$DATA_DIR
+export LOG_DIR=$DATA_DIR
+export TPU_NAME=kevinxdoran
+tensorboard -logdir $LOG_DIR &
