@@ -1,0 +1,6 @@
+gcloud compute ssh kdoran1 # --ssh-flag="-ServerAliveInterval=30"
+
+# Or
+# Setup ssh to work without gcloud command:
+# gcloud compute config-ssh
+# ssh kdoran1.us-central1-f.micronet-kdoran   

@@ -1,0 +1,9 @@
+## Start working 
+# Start up the VM
+gcloud compute instances start kdoran1
+# Possibly need:
+gcloud auth application-default login
+# I can't seem to get locally run tensorboard to connect to a cloud storage,
+# instead, run it on the VM and ssh to the port:
+gcloud compute ssh kdoran1 --ssh-flag="-N -f -L localhost:12345:localhost:6006"                
+  

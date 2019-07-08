@@ -1,0 +1,84 @@
+# Python
+# Install Python 3.7
+sudo dnf install python37
+# Install pip3
+sudo dnf install pip3
+# Install virtualenv
+pip3 install --user virtualenv
+# Create virtual env (this is the development env)
+virtualenv venv --python=python3.7
+
+
+
+# Google Cloud SDK 
+# Create virtual env (used for connecting to VM)
+# Python 2 (Needed by Google Cloud SDK)
+virtualenv venv --python=python2.7
+#sudo dnf install python
+# Download SDK
+curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-250.0.0-linux-x86_64.tar.gz
+# Extract somewhere, then run the installer. Restart shell.
+# Initialize gcloud
+gcloud init
+# ctpu
+# https://github.com/tensorflow/tpu/tree/master/tools/ctpu
+wget https://dl.google.com/cloud_tpu/ctpu/latest/linux/ctpu
+chmod u+x ctpu
+# Add ctpu to the env path. This could also be done for gcloud instead of the standard
+# installation process.
+ln -s ~/software/ctpu  ~/projects/micronet/.gcloud_env/bin/
+# To use Tensorboard, we also need to install Tensorflow
+pip install tensorflow
+# You might need to set a version, 
+# pip install 'tensorflow==1.13.1'
+# To use gcloud features, you may need to login:
+gcloud auth application-default login
+# With tensorboard running on the VM, you can connect your local port to the 
+# remote port with:
+gcloud compute ssh kdoran1 --ssh-flag="-N -f -L localhost:12345:localhost:6006"
+
+# On the VM, you need to create a `catputer-tpu-profile` script by running the
+# below command. (why on earth is this needed like this...)
+pip install --upgrade "cloud-tpu-profiler>=1.12"
+# /home/k/.local/bin is where the cloud-tpu-profiler script is stored.
+export $PATH="$PATH:/home/k/.local/bin" 
+cloud-tpu-profiler 1.12 
+# The TPU service needs to be given permissions to the cloud bucket:
+# https://cloud.google.com/tpu/docs/cloud-tpu-tools
+
+
+# ImagenetData
+# https://cloud.google.com/tpu/docs/tutorials/inception#full-dataset
+wget https://raw.githubusercontent.com/tensorflow/tpu/master/tools/datasets/imagenet_to_gcs.py
+export DATA_DIR=gs://micronet_bucket1/imageNet
+export SCRATCH_DIR=/tmp/imagenet_temp_files
+pip install google-cloud-storage
+python imagenet_to_gcs.py --project=micronet --gcs_output_path=$DATA_DIR --local_scratch_dir=$SCRATCH_DIR --imagenet_username=leImageNet --imagenet_access_key=inSoaringLark4
+
+# tensorflow Python
+# From the micronet env
+sudo pip install --upgrade tensorflow
+pip freeze > requirements.txt
+
+
+# Setup ssh to work without gcloud command:
+gcloud compute config-ssh
+# It will say you can now run:
+ssh kdoran1.us-central1-f.micronet-kdoran
+# ... or something similar.
+
+# To get Pycharm to recognise sibling imports correctly, you may need to mark the
+# src dir as a 'source root'.
+
+# Sync files via rsync (manual) or lsyncd.
+# For lysncd
+sudo dnf install lysncd
+# lsyncd 
+#   turn on all logging: -log all    
+#   run in foreground: -nodaemon   
+#   use ssh commands to move things at the target instead of deleting and recreating: -rsyncssh ./ kdoran1.us-central1-f.micronet-kdoran:~/micronet_synced
+# lsyncd -log all -nodaemon -rsyncssh ./ kdoran1.us-central1-f.micronet-kdoran ~/micronet_synced
+# The above command results in too many inodes being watched, so I created a config file. 
+# Instead, run:
+lsyncd ./scripts/lsyncd_config
+

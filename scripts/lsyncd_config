@@ -1,0 +1,13 @@
+settings {
+    nodaemon = true, -- Run in foreground.
+}
+sync {
+    default.rsyncssh,
+    source="/home/k/projects/micronet",
+    host="kdoran1.us-central1-f.micronet-kdoran",
+    targetdir="micronet_lsyncd",
+    delay=4, -- seconds to wait while aggregating. Default is 15.
+    exclude={"/home/k/projects/micronet/venv", "/home/k/projects/micronet/venv", "/home/k/projects/micronet/gcloud_env"},
+    delete='startup' -- Lsyncd will delete files on target when starting (if needed to keep target folder in sync with source).
+}
+
