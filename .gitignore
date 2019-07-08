@@ -13,3 +13,6 @@ src/micronet.egg-info/
 
 # Swap files
 *.swp
+
+# Pycache folders
+__pycache__/
