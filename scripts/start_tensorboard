@@ -1,0 +1,12 @@
+export BUCKET_NAME=micronet_bucket1                                                            
+export DATA_TYPE=imageNet                                                                      
+export DATA_DIR=$BUCKET_NAME$/$DATA_TYPE                                                       
+export LOG_DIR=$BUCKET_NAME/models/$DATA_TYPE/mobilenet_v1                                     
+export TPU_NAME=kdoran1                                                                        
+                                                                                               
+# Start tensorflow                                                                             
+tensorboard -logdir $LOG_DIR &                                                                 
+# For running capture_tpu_profile.                                                             
+export PATH="$PATH:/home/k/.local/bin"                                                         
+# Start profiling capture for TPUs.                                                            
+capture_tpu_profile --tpu=kdoran1 --logdir=$LOG_DIR     
