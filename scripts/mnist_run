@@ -1,0 +1,1 @@
+python ./models/official/mnist/mnist_tpu.py  --tpu=kdoran1  --model_dir=gs://micronet_bucket1/models/mnist/example  --data_dir=gs://micronet_bucket1/mnist --use_tpu=True --iterations=500 --train_steps=5000 
