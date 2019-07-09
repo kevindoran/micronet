@@ -1,0 +1,6 @@
+{
+  "gcloud_project_name": "micronet_kdoran",
+  "tpu_name": "kdoran1",
+  "tpu_zone": "us-central1-f",
+  "bucket_name": "micronet_bucket1"
+}
