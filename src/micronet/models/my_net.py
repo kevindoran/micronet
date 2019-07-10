@@ -40,6 +40,7 @@ learning_rate_base = 0.05
 #           TPUs. Note: what updates happen here, between the batches?
 
 
+
 def _train_input_fn(mnist_data_dir, batch_size, params):
     """train_input_fn defines the input pipeline used for training."""
     del params
@@ -63,6 +64,12 @@ def _train_input_fn(mnist_data_dir, batch_size, params):
     return ds
 
 
+def _eval_input_fn(mnist_data_dir, batch_size, params):
+    del params
+    ds = mnist_dataset.test(mnist_data_dir)
+    ds = ds.batch(batch_size, drop_remainder=True)
+    return ds
+
 # Tutorials/examples show the model_dir being sent to the input_fun through
 # the estimator. However, this requires using the 'params' dict parameter of
 # TPUEstimator's __init__ function, and then manually extracting it by name
@@ -71,6 +78,7 @@ def _train_input_fn(mnist_data_dir, batch_size, params):
 # relationship of some sort.
 # Instead, I'll just bind the model_dir parameter to the function.
 train_input_fn = functools.partial(_train_input_fn, mnist_data_dir, batch_size)
+eval_input_fn = functools.partial(_eval_input_fn, mnist_data_dir, batch_size)
 
 
 #def create_model(input, data_format):
@@ -276,7 +284,8 @@ def main():
         gcloud_settings, model_dir, model_fn, batch_size)
 
     # Train the model.
-    estimator.train(input_fn=train_input_fn, max_steps=training_steps)
+    #estimator.train(input_fn=train_input_fn, max_steps=training_steps)
+    estimator.evaluate(input_fn=eval_input_fn, steps=9)
 
 
 if __name__ == '__main__':
