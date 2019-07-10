@@ -7,7 +7,12 @@ sync {
     host="kdoran1.us-central1-f.micronet-kdoran",
     targetdir="micronet_lsyncd",
     delay=4, -- seconds to wait while aggregating. Default is 15.
-    exclude={"/home/k/projects/micronet/venv", "/home/k/projects/micronet/venv", "/home/k/projects/micronet/gcloud_env"},
+    exclude={"/home/k/projects/micronet/venv", 
+             "/home/k/projects/micronet/.git", 
+             "/home/k/projects/micronet/.idea", 
+             "/home/k/projects/micronet/gcloud_env",
+             "/home/k/projects/micronet/tensorflow_models",
+             "/home/k/projects/micronet/tensorflow_tpu"},
     delete='startup' -- Lsyncd will delete files on target when starting (if needed to keep target folder in sync with source).
 }
 
