@@ -5,8 +5,8 @@ default_settings_file = 'gcloud_settings.json'
 
 class CloudSettings:
 
-    def __init__(self, gcloud_project_name, tpu_name, tpu_zone, bucket_name):
-        self.gloud_project_name = gcloud_project_name
+    def __init__(self, project_name, tpu_name, tpu_zone, bucket_name):
+        self.project_name = project_name
         self.tpu_name = tpu_name
         self.tpu_zone = tpu_zone
         self.bucket_name = bucket_name
@@ -23,9 +23,9 @@ def parse_settings(input):
     return settings
 
 
-def as_settings(self, dct):
-    if 'gloud_project_name' in dct:
-        return CloudSettings(dct['gcloud_project_name'],
+def as_settings(dct):
+    if 'project_name' in dct:
+        return CloudSettings(dct['project_name'],
                              dct['tpu_name'],
                              dct['tpu_zone'],
                              dct['bucket_name'])

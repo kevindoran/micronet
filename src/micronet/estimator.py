@@ -11,7 +11,7 @@ def create_estimator(gcloud_settings, model_dir, model_fn, batch_size):
             # In the future, the tpu parameter might support lists.
             tpu=gcloud_settings.tpu_name,
             zone=gcloud_settings.tpu_zone,
-            project=gcloud_settings.bucket_name)
+            project=gcloud_settings.project_name)
 
     run_config = tf.contrib.tpu.RunConfig(
         cluster=tpu_cluster_resolver,
@@ -62,7 +62,7 @@ def create_estimator(gcloud_settings, model_dir, model_fn, batch_size):
         config=run_config,
         train_batch_size=batch_size,
         eval_batch_size=batch_size,
-        model_dir=None, # disable checkpoints.
+        # model_dir=None, # Inherited from runConfig.
         # predict_batch_size=FLAGS.batch_size, possibly needed. Put if I use
         # params={'key':'value'}. Optional. Don't need it yet.
         # prediction on the CPU, then we don't need TPU prediction.
