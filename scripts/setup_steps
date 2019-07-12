@@ -1,14 +1,20 @@
-# Python
-# Install Python 3.7
-sudo dnf install python37
-# Install pip3
-sudo dnf install pip3
-# Install virtualenv
-pip3 install --user virtualenv
-# Create virtual env (this is the development env)
+development venv setup
+======================
+
+1. Install Python 3.7, pip3 and virtual env:
+
+    sudo dnf install python37
+    sudo dnf install pip3
+    pip3 install --user virtualenv
+
+2. Create virtual env:
 virtualenv venv --python=python3.7
 
-
+3. Install required packages. Check the requirements.txt for updated list.
+You at least need:
+tensorflow==1.13.1
+pytz
+tensorflow-datasets (which requires you to have python3-devel installed in the system.)
 
 # Google Cloud SDK 
 # Create virtual env (used for connecting to VM)
@@ -54,11 +60,6 @@ export DATA_DIR=gs://micronet_bucket1/imageNet
 export SCRATCH_DIR=/tmp/imagenet_temp_files
 pip install google-cloud-storage
 python imagenet_to_gcs.py --project=micronet --gcs_output_path=$DATA_DIR --local_scratch_dir=$SCRATCH_DIR --imagenet_username=leImageNet --imagenet_access_key=inSoaringLark4
-
-# tensorflow Python
-# From the micronet env
-sudo pip install --upgrade tensorflow
-pip freeze > requirements.txt
 
 
 # Setup ssh to work without gcloud command:
