@@ -22,26 +22,26 @@ eval_split = tfds.Split.TRAIN.subsplit(tfds.percent[:EVAL_PERCENTAGE])
 IMAGE_SIZE = 24
 
 
-def train_dataset(batch_size, augment):
+def train_dataset(augment):
     ds = tfds.load(name='cifar100', split=train_split)
-    ds = preprocess(ds, batch_size, augment)
+    ds = preprocess(ds, augment)
     return ds
 
 
-def eval_dataset(batch_size, augment):
+def eval_dataset(augment):
     ds = tfds.load(name='cifar100', split=eval_split)
-    ds = preprocess(ds, batch_size, augment)
+    ds = preprocess(ds, augment)
     return ds
 
 
-def test_dataset(batch_size, augment):
+def test_dataset(augment):
     ds = tfds.load(name='cifar100', split=tfds.Split.TEST)
-    ds = preprocess(ds, batch_size, augment)
+    ds = preprocess(ds, augment)
     return ds
 
 
 # Copied from /tensorflow_models/tutorials/image/cifar10/cifar10_input.py
-def preprocess(dataset, batch_size, augment):
+def preprocess(dataset, augment):
     """Preprocess the images with optional augmentation.
 
     Args:
@@ -85,6 +85,6 @@ def preprocess(dataset, batch_size, augment):
 
     dataset = dataset.map(map_fn, num_parallel_calls=10) # num_parallel_calls=10, what does this do?
     # Dataset is small enough to be fully loaded on memory:
-    dataset = dataset.prefetch(-1)
-    dataset = dataset.repeat().batch(batch_size)
+    # This should probably be just done by clients.
+    # dataset = dataset.prefetch(-1)
     return dataset

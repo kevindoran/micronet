@@ -32,26 +32,22 @@ def _check_dataset(ds):
     # FIXME 1: (switch to uint8)
     # assert img.dtype == tf.uint8
     assert img.dtype == tf.float32
-    assert img.shape.rank == 4 # batch x W x H x D
+    assert img.shape.rank == 3 # W x H x D
     # Note: the batch dimension doesn't have a hard-coded size so as to allow
     # the network be flexible enough to use any batch sizes.
-    assert [None, cifar_ds.IMAGE_SIZE, cifar_ds.IMAGE_SIZE, 3] \
-        == img.shape.as_list()
+    assert [cifar_ds.IMAGE_SIZE, cifar_ds.IMAGE_SIZE, 3] == img.shape.as_list()
     assert label.dtype == tf.uint8
     # FIXME 2
     # assert record_count(ds) == cifar_ds.TRAIN_COUNT
 
 
 def test_train_dataset():
-    batch_size = 100
-    _check_dataset(cifar_ds.train_dataset(batch_size, augment=False))
+    _check_dataset(cifar_ds.train_dataset(augment=False))
 
 
 def test_eval_dataset():
-    batch_size = 100
-    _check_dataset(cifar_ds.eval_dataset(batch_size, augment=False))
+    _check_dataset(cifar_ds.eval_dataset(augment=False))
 
 
 def test_test_dataset():
-    batch_size = 100
-    _check_dataset(cifar_ds.test_dataset(batch_size, augment=False))
+    _check_dataset(cifar_ds.test_dataset(augment=False))
