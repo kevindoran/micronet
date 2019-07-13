@@ -26,19 +26,27 @@ def record_count(dataset):
 
 
 def _check_dataset(ds):
-    ds_iter = ds.make_one_shot_iterator()
-    # The records should be a (img, label) tuple.
-    (img, label) = ds_iter.get_next()
-    # FIXME 1: (switch to uint8)
-    # assert img.dtype == tf.uint8
-    assert img.dtype == tf.float32
-    assert img.shape.rank == 3 # W x H x D
-    # Note: the batch dimension doesn't have a hard-coded size so as to allow
-    # the network be flexible enough to use any batch sizes.
-    assert [cifar_ds.IMAGE_SIZE, cifar_ds.IMAGE_SIZE, 3] == img.shape.as_list()
-    assert label.dtype == tf.uint8
-    # FIXME 2
-    # assert record_count(ds) == cifar_ds.TRAIN_COUNT
+    with tf.Session() as sess:
+        ds_iter = ds.make_one_shot_iterator()
+        # The records should be a (img, label) tuple.
+        (img, label) = ds_iter.get_next()
+        # FIXME 1:  switch to uint8.
+        assert img.dtype == cifar_ds.DTYPE
+        assert img.shape.rank == 3 # W x H x D
+        # Note: the batch dimension doesn't have a hard-coded size so as to allow
+        # the network be flexible enough to use any batch sizes.
+        # Default Tensorflow image format seems to be [depth, height, width). So
+        # try to use that format (up until we need to switch channel to be first for
+        # running on a GPU).
+        # https://www.tensorflow.org/guide/performance/overview#use_nchw_imag
+        assert [cifar_ds.IMAGE_SIZE, cifar_ds.IMAGE_SIZE, 3] == img.shape.as_list()
+        # FIXME 1: switch to uint8.
+        # assert label.dtype == tf.uint8
+        assert label.shape == ()
+        label_val = label.eval()
+        assert 0 <= label_val < 100
+        # FIXME 2
+        # assert record_count(ds) == cifar_ds.TRAIN_COUNT
 
 
 def test_train_dataset():
