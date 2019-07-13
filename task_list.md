@@ -15,3 +15,7 @@ The normalization step that will need to be removed:
 For a small dataset like cifar, counting elements would be useful in tests. I 
 tried using a dataset reduction, but either it's not working or it's taking too 
 long.
+
+3. Determine if 'channels_first' or 'channels_last' is better for TPUs.
+
+4. Found out if labels should be loaded as scalars or as one-hot vectors. 

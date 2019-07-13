@@ -1,12 +1,16 @@
 import tensorflow as tf
+from enum import Enum
 
 # Number of iterations to run on the TPU workers before returning control to the
 # master (not sure if the terminology is correct here).
 iterations_between_model_update = 50
 checkpoints_max = 0
 
+ProcessorType = Enum('ProcessorType', 'CPU, GPU, TPU')
 
-def create_estimator(gcloud_settings, model_dir, model_fn, batch_size):
+
+
+def create_tpu_estimator(gcloud_settings, model_dir, model_fn, batch_size):
     tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
             # In the future, the tpu parameter might support lists.
             tpu=gcloud_settings.tpu_name,
@@ -71,3 +75,9 @@ def create_estimator(gcloud_settings, model_dir, model_fn, batch_size):
     )
     return estimator
 
+
+def create_cpu_estimator(model_dir, model_fn):
+    estimator = tf.estimator.Estimator(
+        model_fn=model_fn,
+        model_dir=model_dir)
+    return estimator

@@ -20,6 +20,8 @@ train_split = tfds.Split.TRAIN.subsplit(tfds.percent[:TRAIN_PERCENTAGE])
 eval_split = tfds.Split.TRAIN.subsplit(tfds.percent[:EVAL_PERCENTAGE])
 
 IMAGE_SIZE = 24
+# FIXME 1: (switch to uint8)
+DTYPE = tf.float32
 
 
 def train_dataset(augment):
@@ -60,9 +62,12 @@ def preprocess(dataset, augment):
         """
         img = record['image']
         label = record['label']
-        # FIXME: 1 (switch to uint8)
-        img = tf.cast(img, tf.uint8)
-        label = tf.cast(label, tf.uint8)
+        # FIXME 1: (switch to uint8)
+        #img = tf.cast(img, tf.uint8)
+        # FIXME 1: Why can't label's be unit8?
+        #label = tf.cast(label, tf.uint8)
+        # () is the shape for a scalar.
+        tf.ensure_shape(label, shape=())
         if augment:
             # Randomly crop a [height, width] section of the image.
             img = tf.random_crop(img, [IMAGE_SIZE, IMAGE_SIZE, 3])

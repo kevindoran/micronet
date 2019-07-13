@@ -280,7 +280,7 @@ def model_fn(features, labels, mode, params):
 def main():
     logging.getLogger('tensorflow').setLevel(logging.INFO)
 
-    estimator = micronet.estimator.create_estimator(
+    estimator = micronet.estimator.create_tpu_estimator(
         gcloud_settings, model_dir, model_fn, batch_size)
 
     # Train the model.
