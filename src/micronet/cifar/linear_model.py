@@ -1,25 +1,7 @@
-# take in input
-# make a single layer
-# make define loss
-# setup validation metric
-# setup test
-
-# we need an estimator
-
 import tensorflow as tf
 import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
 import functools
-
-"""
-Comment from: https://www.tensorflow.org/guide/using_tpu
-
-The simplest way to maintain a model that can be run both on CPU/GPU or on a 
-Cloud TPU is to define the model's inference phase (from inputs to predictions) 
-outside of the model_fn. Then maintain separate implementations of the Estimator
-setup and model_fn, both wrapping this inference step. For an example of this 
-pattern compare the mnist.py and mnist_tpu.py implementation in tensorflow/models.
-"""
 
 learning_rate_base = 0.05
 
@@ -87,6 +69,7 @@ def create_model_fn(processor_type):
     """
     fn = functools.partial(model_fn, processor_type)
     return fn
+
 
 # Interestingly, it looks like the params argument is optional, as long as it
 # is also not passed to the estimator. So removing from here, as parameter.

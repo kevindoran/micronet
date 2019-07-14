@@ -1,5 +1,4 @@
 import pytest
-import tensorflow as ft
 import micronet.cifar.linear_model as cifar_linear_model
 import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
