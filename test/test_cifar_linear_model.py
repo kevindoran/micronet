@@ -33,8 +33,8 @@ def test_is_trainable(tmpdir):
         mini_ds = cifar_ds.train_dataset(augment=False).take(num_records)
         return mini_ds.batch(5, drop_remainder=True)
 
-    processor = micronet.estimator.ProcessorType.CPU
-    model_fn = functools.partial(cifar_linear_model.model_fn, processor)
+    model_fn = micronet.cifar.linear_model.create_model_fn(
+        processor_type=micronet.estimator.ProcessorType.CPU)
     estimator = micronet.estimator.create_cpu_estimator(model_dir, model_fn)
     estimator.train(train_input_fn, max_steps=100)
     # Results is a dict containing the metrics defined by the model_fn.

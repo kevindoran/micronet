@@ -9,6 +9,7 @@
 import tensorflow as tf
 import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
+import functools
 
 """
 Comment from: https://www.tensorflow.org/guide/using_tpu
@@ -77,10 +78,20 @@ def create_train_op(loss, processor_type):
     return train_op
 
 
+def create_model_fn(processor_type):
+    """Bind the processor type parameter and return the resulting function.
+
+    This way of creating the model_fn means we don't need to use to pass
+    parameters through the estimator and take them via the params parameter.
+    That mechanism seems flaky and seems to have poor encapsulation.
+    """
+    fn = functools.partial(model_fn, processor_type)
+    return fn
+
 # Interestingly, it looks like the params argument is optional, as long as it
-# is also not passed to the estimator. So removing from here, as parameter
-# binding is used instead of the params object.
-# def model_fn(processor_type, features, labels, mode, params):
+# is also not passed to the estimator. So removing from here, as parameter.
+# Original signature:
+#     def model_fn(processor_type, features, labels, mode, params):
 def model_fn(processor_type, features, labels, mode):
     image = features
     tf.ensure_shape(labels, shape=(None,))
