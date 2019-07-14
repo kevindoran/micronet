@@ -4,7 +4,7 @@ import micronet.estimator
 import functools
 
 learning_rate_base = 0.05
-
+NUM_TRAINABLE_PARAM = 100 * (cifar_ds.IMAGE_SIZE * cifar_ds.IMAGE_SIZE * 3 + 1)
 
 def metric_fn(labels, logits):
     accuracy = tf.metrics.accuracy(

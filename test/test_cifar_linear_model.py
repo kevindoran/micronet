@@ -2,11 +2,20 @@ import pytest
 import micronet.cifar.linear_model as cifar_linear_model
 import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
+import test.common
+
+
+def test_num_trainable_params():
+    """Tests that the model has the expected number of trainable parameters."""
+    model = micronet.cifar.linear_model.create_model()
+    assert test.common.count_trainable_params(model) \
+           == cifar_linear_model.NUM_TRAINABLE_PARAM
+    # Just for sanity sake, so that I know the true value and if it changes:
+    assert cifar_linear_model.NUM_TRAINABLE_PARAM == 172900
 
 
 def test_is_trainable(tmpdir):
-    """
-    Test that that training and evaluation run as expected.
+    """Test that that training and evaluation run as expected.
 
     Tests that:
         1. The untrained model can be evaluated, and that there is about 1%

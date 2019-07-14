@@ -7,3 +7,6 @@ outside of the model_fn. Then maintain separate implementations of the Estimator
 setup and model_fn, both wrapping this inference step. For an example of this 
 pattern compare the mnist.py and mnist_tpu.py implementation in tensorflow/models.
 """
+
+Keras Tensorflow backend:
+https://github.com/keras-team/keras/blob/master/keras/backend/tensorflow_backend.py

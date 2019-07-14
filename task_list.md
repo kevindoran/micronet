@@ -19,3 +19,5 @@ long.
 3. Determine if 'channels_first' or 'channels_last' is better for TPUs.
 
 4. Found out if labels should be loaded as scalars or as one-hot vectors. 
+
+5. Finish implementing a count of trainable parameter bytes in test/common.py. 
