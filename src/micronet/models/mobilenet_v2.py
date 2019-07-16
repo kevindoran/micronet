@@ -37,6 +37,17 @@ op = lib.op
 
 expand_input = ops.expand_input_by_factor
 
+"""
+note(kdoran): op is defined like so:
+
+_Op = collections.namedtuple('Op', ['op', 'params', 'multiplier_func'])
+
+
+def op(opfunc, multiplier_func=depth_multiplier, **params):
+  multiplier = params.pop('multiplier_transform', multiplier_func)
+  return _Op(opfunc, params=params, multiplier_func=multiplier)
+"""
+
 # pyformat: disable
 # Architecture: https://arxiv.org/abs/1801.04381
 V2_DEF = dict(

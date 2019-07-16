@@ -30,7 +30,7 @@ def _check_dataset(ds):
         ds_iter = ds.make_one_shot_iterator()
         # The records should be a (img, label) tuple.
         (img, label) = ds_iter.get_next()
-        # FIXME 1:  switch to uint8.
+        # FIXME 1: switch to uint8.
         assert img.dtype == cifar_ds.DTYPE
         assert img.shape.rank == 3 # W x H x D
         # Note: the batch dimension doesn't have a hard-coded size so as to allow

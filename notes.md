@@ -10,3 +10,17 @@ pattern compare the mnist.py and mnist_tpu.py implementation in tensorflow/model
 
 Keras Tensorflow backend:
 https://github.com/keras-team/keras/blob/master/keras/backend/tensorflow_backend.py
+
+Keras implementation of MobileNet V2 (much easier to read):
+https://github.com/keras-team/keras-applications/blob/master/keras_applications/mobilenet_v2.py
+
+And another implementation, but I haven't checked the quality:
+https://github.com/xiaochus/MobileNetV2/blob/master/mobilenet_v2.py
+
+Good interpretation of MobileNetv2:
+https://machinethink.net/blog/mobilenet-v2/
+Although, he claims that compression/decompression are valid analogies, which
+I'm not sure I understand. My current perspective is making the input to a layer
+highly redundant so that the information is not lost once ReLU is applied. 
+Preserving the information allows for smaller feature vectors (as the 
+information doesn't need to be maintained scattered within a larger model.)
