@@ -29,7 +29,8 @@ def test_is_trainable(tmpdir):
     eval_count = 1000
     eval_steps = eval_count / batch_size
     assert eval_steps == int(eval_steps)
-    model_fn = micronet.cifar.linear_model.create_model_fn(
+    model_fn = micronet.estimator.create_model_fn(
+        keras_model_fn=micronet.cifar.linear_model.create_model,
         processor_type=micronet.estimator.ProcessorType.CPU)
     estimator = micronet.estimator.create_cpu_estimator(model_dir, model_fn)
 

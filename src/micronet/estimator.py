@@ -1,5 +1,6 @@
 import tensorflow as tf
 from enum import Enum
+import functools
 
 # Number of iterations to run on the TPU workers before returning control to the
 # master (not sure if the terminology is correct here).
@@ -7,7 +8,7 @@ iterations_between_model_update = 50
 checkpoints_max = 0
 
 ProcessorType = Enum('ProcessorType', 'CPU, GPU, TPU')
-
+learning_rate_base = 0.05
 
 
 def create_tpu_estimator(gcloud_settings, model_dir, model_fn, batch_size):
@@ -81,3 +82,83 @@ def create_cpu_estimator(model_dir, model_fn):
         model_fn=model_fn,
         model_dir=model_dir)
     return estimator
+
+
+def metric_fn(labels, logits):
+    accuracy = tf.metrics.accuracy(
+        labels=labels, predictions=tf.argmax(logits, axis=1))
+    return {"accuracy": accuracy}
+
+
+# TODO: is 'op' correct here?
+def create_loss_op(logits, labels):
+    loss = tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=labels)
+    return loss
+
+
+def create_train_op(loss, processor_type):
+    # TODO: decide what learning rate to use.
+    learning_rate = tf.train.exponential_decay(
+        learning_rate_base,
+        tf.train.get_global_step(),
+        decay_steps=100000,
+        decay_rate=0.96)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    if processor_type == ProcessorType.TPU:
+        optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
+    # TODO: is this the correct value for the step argument?
+    train_op = optimizer.minimize(loss, tf.train.get_global_step())
+    return train_op
+
+
+def create_model_fn(keras_model_fn, processor_type):
+    """Bind the processor type parameter and return the resulting function.
+
+    This way of creating the model_fn means we don't need to use to pass
+    parameters through the estimator and take them via the params parameter.
+    That mechanism seems flaky and seems to have poor encapsulation.
+    """
+    fn = functools.partial(model_fn, keras_model_fn, processor_type)
+    return fn
+
+
+# Interestingly, it looks like the params argument is optional, as long as it
+# is also not passed to the estimator. So removing from here, as parameter.
+# Original signature:
+#     def model_fn(processor_type, features, labels, mode, params):
+def model_fn(keras_model_fn, processor_type, features, labels, mode):
+    image = features
+    tf.ensure_shape(labels, shape=(None,))
+    # Labels should be scalar values (not one-hot encoded).
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        # TODO: is it okay to have the create model within an if? Does it
+        #       prevent some sort of model reuse that would otherwise happen?
+        logit_outputs = keras_model_fn()(image, training=True)
+        loss_op = create_loss_op(logit_outputs, labels)
+        train_op = create_train_op(loss_op, processor_type)
+        # FIXME X: how to return either TPU or non TPU estimator spec?
+        estimator_spec = tf.contrib.tpu.TPUEstimatorSpec(mode, loss=loss_op,
+                                                    train_op=train_op)
+    elif mode == tf.estimator.ModeKeys.EVAL:
+        # TODO: What does the training option do?
+        logit_outputs = keras_model_fn()(image, training=False)
+        loss_op = create_loss_op(logit_outputs, labels)
+        # Does the eval_metrics need to be (metric_fn, [labels, outputs])?
+        # FIXME X: how to return either TPU or non TPU estimator spec?
+        # estimator = tf.estimator.EstimatorSpec(mode=mode, loss=loss_op,
+        #                                       eval_metric_ops=(metric_fn,))
+        # From the TPUEstimatorSpec source:
+        #     For evaluation, `eval_metrics `is a tuple of `metric_fn` and
+        #     `tensors`, where `metric_fn` runs on CPU to generate metrics and
+        #     `tensors` represents the `Tensor`s transferred from TPU system to
+        #     CPU host and passed to `metric_fn`.
+        estimator_spec = tf.contrib.tpu.TPUEstimatorSpec(
+            mode=mode, loss=loss_op,
+            eval_metrics=(metric_fn, [labels, logit_outputs]))
+    elif mode == tf.estimator.ModeKeys.PREDICT:
+        raise Exception('Unsupported.')
+    else:
+        raise Exception('unexpected mode: {}'.format(mode))
+    if processor_type == ProcessorType.CPU:
+        estimator_spec = estimator_spec.as_estimator_spec()
+    return estimator_spec
