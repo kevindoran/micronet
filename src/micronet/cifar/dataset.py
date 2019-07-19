@@ -84,7 +84,8 @@ def preprocess(dataset, augment):
             img = tf.image.resize_image_with_crop_or_pad(img, IMAGE_SIZE,
                                                          IMAGE_SIZE)
         # Subtract off the mean and divide by the variance of the pixels.
-        # FIXME: 1 (switch to uint8)
+        # FIXME 1: (switch to uint8)
+        # FIXME 6: insure consistent standardization.
         img = tf.image.per_image_standardization(img)
         return img, label
 

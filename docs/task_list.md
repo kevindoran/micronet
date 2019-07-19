@@ -21,3 +21,7 @@ long.
 4. Found out if labels should be loaded as scalars or as one-hot vectors. 
 
 5. Finish implementing a count of trainable parameter bytes in test/common.py. 
+
+6. Make sure that the input image normalization is identical between training
+and test data; they should be normalized by the same mean and standard 
+deviation.
