@@ -36,6 +36,15 @@ def gcloud_temp_path(request, gcloud_settings):
 
 @pytest.fixture
 def estimator_fn(request, tmpdir, gcloud_temp_path):
+    """Creates and returns a factory that creates a TPUEstimator or Estimator.
+
+    Refer to the nested factory function below for the signature of the returned
+    function.
+
+    This fixture is tested in:
+        * test_estimator.test_estimator_fixture (for TPUEstimator).
+        * FIXME: this also needs a test for the standard Estimator.
+    """
     is_cloud = request.config.getoption('--cloud', default=False)
     use_tpu = True #is_cloud
 
@@ -47,7 +56,7 @@ def estimator_fn(request, tmpdir, gcloud_temp_path):
     else:
         model_dir = str(tmpdir.mkdir('model'))
 
-    # Define the factory fuction to be returned.
+    # The factory function to be returned:
     def create_estimator(keras_model_fn, train_batch_size, eval_batch_size):
         """Create and return an estimator. Could be a CPU or TPU estimator.
 
