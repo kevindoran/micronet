@@ -67,3 +67,10 @@ Possibly related to: https://github.com/tensorflow/tensorflow/issues/25652
 
 20. Add a test for the estimator_fn fixture for when it returns an Estimator
     (not a TPUEstimator).
+    
+21. Make cifar.dataset source the data from either Google cloud storage or the 
+local drive.
+
+22. Create propper assert near that accounts for the [0, 1] probability bound.
+
+23. Inspect overfitting with test_cifar_dataset.py's test_with_estimator test.

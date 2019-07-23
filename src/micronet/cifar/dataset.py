@@ -2,24 +2,31 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 
 # TODO: for speed and to make the dataset splits deterministic, I seems like
-# this will need to migrate to being a manual task of loading the data from
-# a serialized protobuff.
+#       this will need to migrate to being a manual task of loading the data
+#       from a serialized protobuff.
+
+# TODO: data augmentation
+
+# FIXME 21: support both cloud and local storage.
+_CLOUD_DATA_DIR = 'gs://micronet_bucket1/cifar100'
+
+# TODO: this whole file could be cleaned up. The API could be improved too.
+
+# Splits.
 # The Cifar100 dataset in tensorflow-datasets only has two predefined splits,
 # train and test, so we must manually make a eval split.
-# TODO: data augmentation
 TRAIN_COUNT = 45000
 EVAL_COUNT = 5000
 TEST_COUNT = 10000
-
 # Train and eval split percentages.
 # Percentage of total Cifar "train" set, which is 50,000.
 TRAIN_PERCENTAGE = 90
 EVAL_PERCENTAGE = 10
-
 train_split = tfds.Split.TRAIN.subsplit(tfds.percent[:TRAIN_PERCENTAGE])
 eval_split = tfds.Split.TRAIN.subsplit(tfds.percent[:EVAL_PERCENTAGE])
 
 DEFAULT_IMAGE_SIZE = 24
+MAX_IMAGE_SIZE = 32
 COLOR_CHANNELS = 3 # RGB
 DEFAULT_DATA_SHAPE = (DEFAULT_IMAGE_SIZE, DEFAULT_IMAGE_SIZE, COLOR_CHANNELS)
 # FIXME 1: (switch to uint8)
@@ -27,22 +34,34 @@ DTYPE = tf.float32
 CLASSES = 100
 
 
-def train_dataset(augment, crop_to):
-    ds = tfds.load(name='cifar100', split=train_split, download=False,
-                   data_dir='gs://micronet_bucket1/cifar100')
-                   #data_dir='tmp/cifar100/cifar100')
+def train_dataset(augment, crop_to, cloud_storage=False):
+    # Note: is this if-else compatible with TPU's input pipeline requirements?
+    # I saw a mention that some types of branching are not supported.
+    if cloud_storage:
+        ds = tfds.load(name='cifar100', split=train_split, download=False,
+                       data_dir=_CLOUD_DATA_DIR)
+    else:
+        ds = tfds.load(name='cifar100', split=train_split)
     ds = preprocess(ds, augment, crop_to)
     return ds
 
 
-def eval_dataset(augment, crop_to):
-    ds = tfds.load(name='cifar100', split=eval_split)
+def eval_dataset(augment, crop_to, cloud_storage=False):
+    if cloud_storage:
+        ds = tfds.load(name='cifar100', split=eval_split, download=False,
+                       data_dir=_CLOUD_DATA_DIR)
+    else:
+        ds = tfds.load(name='cifar100', split=eval_split)
     ds = preprocess(ds, augment, crop_to)
     return ds
 
 
-def test_dataset(augment, crop_to):
-    ds = tfds.load(name='cifar100', split=tfds.Split.TEST)
+def test_dataset(augment, crop_to, cloud_storage=False):
+    if cloud_storage:
+        ds = tfds.load(name='cifar100', split=tfds.Split.TEST, download=False,
+                       data_dir=_CLOUD_DATA_DIR)
+    else:
+        ds = tfds.load(name='cifar100', split=tfds.Split.TEST)
     ds = preprocess(ds, augment, crop_to)
     return ds
 

@@ -2,6 +2,38 @@ import pytest
 import micronet.cifar.dataset as cifar_ds
 import tensorflow as tf
 import numpy as np
+import test.util
+import functools
+
+
+# This input function is an edited version of a the model function from:
+# https://github.com/tensorflow/tpu/blob/master/models/experimental/cifar_keras/cifar_keras.py
+# It has been edited as mentioned in the comments below. The tests are assuming
+# that this model is functioning.
+# Note: this function is also in test_estimator.py (with slightly different
+# edits). If it is used in more places, consider factoring it out.
+def _keras_model_fn():
+    """Define a CIFAR model in Keras."""
+    layers = tf.keras.layers
+    # Pass our input tensor to initialize the Keras input layer.
+    # Edited:
+    # v = layers.Input(tensor=input_features)
+    input_layer = layers.Input(shape=(32, 32, 3))
+    v = layers.Conv2D(filters=32, kernel_size=5,
+                      activation="relu", padding="same")(input_layer)
+    v = layers.MaxPool2D(pool_size=2, name='maxPool1')(v)
+    v = layers.Conv2D(filters=64, kernel_size=5,
+                      activation="relu", padding="same")(v)
+    v = layers.MaxPool2D(pool_size=2, name='maxPool2')(v)
+    v = layers.Flatten()(v)
+    fc1 = layers.Dense(units=512, activation="relu")(v)
+    # Edited:
+    # logits = layers.Dense(units=10)(fc1)
+    logits = layers.Dense(units=100)(fc1)
+    # Edited:
+    # return logits
+    model = tf.keras.Model(input_layer, logits)
+    return model
 
 
 # FIXME 2: It would be nice to be able to count the elements in a reasonably
@@ -70,3 +102,70 @@ def test_test_dataset():
         cifar_ds.test_dataset(augment=False,
                               crop_to=cifar_ds.DEFAULT_IMAGE_SIZE),
         crop_to=cifar_ds.DEFAULT_IMAGE_SIZE)
+
+
+# FIXME 20: we should make this run both for the standard and TPU estimator.
+@pytest.mark.tpu_only
+def test_with_estimator(estimator_fn):
+    """Tests that the cifar dataset pipeline can generate data for a TPU.
+
+    This is tested by running a train and evaluate job on a TPU using the
+    datasets created by cifar.train_dataset(), cifar.eval_dataset() and
+    cifar.test_dataset().
+
+    Specific checks:
+        1. estimator.evaluate() runs without errors when using
+           cifar.eval_dataset().
+        2. estimator.train()  runs without errors when using
+           cifar.train_dataset().
+        2. The model accuracy improves after training.
+        3. estimator.evaluate() runs without errors when using
+           cifar.test_dataset().
+    """
+    # Setup
+    # These constants are similar to those chosen in test_estimator.py. Would
+    # be nice to factor them out somewhere.
+    batch_size = 128
+    crop_to = 32 # Size expected by our test model.
+    expected_accuracy = 0.99 # Expect overfitting.
+    train_steps = 10000
+    eval_steps = 5000 // batch_size # there are 5000 eval samples.
+    test_steps = 10000 // batch_size # there are 1000 test samples.
+    cifar100_classes = 100
+    estimator = estimator_fn(keras_model_fn=_keras_model_fn,
+                             train_batch_size=batch_size,
+                             eval_batch_size=batch_size)
+
+    # Create 3 input functions, for eval, train and test.
+    def input_fn(ds_fn, params):
+        del params
+        # We must make any dataset call within the input_fn. Thus, this input_fn
+        # cannot take a Dataset as a parameter, it must take a factory.
+        # Otherwise, the dataset will be created outside of the training/eval
+        # session.
+        ds = ds_fn(augment=False, crop_to=crop_to, cloud_storage=True)
+        return ds.cache().repeat().batch(batch_size, drop_remainder=True)\
+            .prefetch(1)
+
+    train_input_fn = functools.partial(input_fn, cifar_ds.train_dataset)
+    eval_input_fn = functools.partial(input_fn, cifar_ds.eval_dataset)
+    test_input_fn = functools.partial(input_fn, cifar_ds.test_dataset)
+
+    # Test
+    # 1, 2, 3. Run estimator.evaluate() with eval_dataset(), estimator.train()
+    # with train_dataset() and insure accuracy increases.
+    test.util.check_train_and_eval(
+        estimator, train_input_fn=train_input_fn, eval_input_fn=eval_input_fn,
+        expected_post_train_accuracy=expected_accuracy, eval_steps=eval_steps,
+    train_steps=train_steps, num_classes=cifar100_classes)
+
+    # 4. Run estimator.evaluate() with train_dataset().
+    results = estimator.evaluate(test_input_fn, steps=test_steps)
+    # The reason for the poor test dataset performance (~30%) I *think* is due
+    # to overfitting. Supporting this idea is that the eval step above is
+    # getting ~99% accuracy. However, it's worth looking into more. (FIXME 23)
+    # See gs://micronet_bucket1/pytest/test_with_estimator/20190723T173507/ for
+    # results that seem to back this idea up.
+    assert 0.2 < results['accuracy'] < 0.4
+    # FIXME 22: create a propper assert near that takes into around the domain
+    # restriction [0,1] and the resulting non-linear bounds.

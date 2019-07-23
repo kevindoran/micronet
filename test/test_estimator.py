@@ -17,10 +17,11 @@ EVAL_STEPS = 100
 EXPECTED_ACCURACY = 0.7
 NUM_CIFAR10_CLASSES = 10
 
+
 # This input function is copied from the tensorflow/tpu repository, and thus,
 # is assumed to be working. Although, there is two edits as mentioned in the
 # comments below.
-def keras_model_fn():
+def _keras_model_fn():
     """Define a CIFAR model in Keras."""
     layers = tf.keras.layers
     # Pass our input tensor to initialize the Keras input layer.
@@ -115,7 +116,7 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
     # Test
     # 1. Create the model_fn via create_model_fn().
     model_fn = micronet.estimator.create_model_fn(
-        keras_model_fn, processor_type=micronet.estimator.ProcessorType.TPU)
+        _keras_model_fn, processor_type=micronet.estimator.ProcessorType.TPU)
     assert model_fn
 
     # 2. Construct a TPUEstimator.
@@ -155,7 +156,7 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     # Create the estimator compatible model_fn from the Keras model_fn.
     # This method is tested elsewhere.
     model_fn = micronet.estimator.create_model_fn(
-        keras_model_fn, processor_type=micronet.estimator.ProcessorType.TPU)
+        _keras_model_fn, processor_type=micronet.estimator.ProcessorType.TPU)
     batch_size = 128
 
     # Test
@@ -190,7 +191,7 @@ def test_estimator_fixture(estimator_fn):
     # Test
     # 1. estimator_fn shouldn't be None, and shouldn't return None.
     assert estimator_fn
-    estimator = estimator_fn(keras_model_fn=keras_model_fn,
+    estimator = estimator_fn(keras_model_fn=_keras_model_fn,
                              train_batch_size=batch_size,
                              eval_batch_size=batch_size)
     assert estimator
