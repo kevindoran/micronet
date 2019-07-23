@@ -3,7 +3,7 @@ import micronet.models.mobilenetv2 as mobilenetv2
 import micronet.models.xiaochus_mobilenetv2 as xiaochus_mobilenetv2
 import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
-import test.common
+import test.util
 
 
 def test_num_trainable_params():
@@ -11,12 +11,12 @@ def test_num_trainable_params():
     input_shape = (1024, 1024, 3)
     model = mobilenetv2.create_model(input_shape=input_shape)
     # FIXME
-    #assert test.common.count_trainable_params(model) \
+    #assert test.util.count_trainable_params(model) \
     #       == mobilenetv2.rough_num_trainable_params(
     #            alpha=1.0, input_shape=input_shape, classes=1000)
     # FIXME: 3,504,872 is ~50,000 - 100,000 more parameters than what the
     #        paper mentions.
-    assert test.common.count_trainable_params(model) == 3504872
+    assert test.util.count_trainable_params(model) == 3504872
 
 
 def keras_model_fn():

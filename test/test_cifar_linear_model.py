@@ -2,12 +2,12 @@ import pytest
 import micronet.cifar.linear_model as cifar_linear_model
 import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
-import test.common
+import test.util
 
 def test_num_trainable_params():
     """Tests that the model has the expected number of trainable parameters."""
     model = micronet.cifar.linear_model.create_model()
-    assert test.common.count_trainable_params(model) \
+    assert test.util.count_trainable_params(model) \
            == cifar_linear_model.NUM_TRAINABLE_PARAM
     # Just for sanity sake, so that I know the true value and if it changes:
     assert cifar_linear_model.NUM_TRAINABLE_PARAM == 172900

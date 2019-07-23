@@ -58,3 +58,12 @@ that the one copied from tensorflow/tpu repo example.
 18. Check out why the TPU is becoming 'Unhealthy' when multiple TPU tests are
 collected in a single pytest run. Could be a timing issue (maybe there is a 
 need to introduce a delay between tests that use TPUs).
+
+19. Figure out why we are getting the error: 
+        'ERROR:tensorflow:Operation of type Placeholder (input_1) is not 
+        supported on the TPU. Execution will fail if this op is used in the 
+        graph.' 
+Possibly related to: https://github.com/tensorflow/tensorflow/issues/25652
+
+20. Add a test for the estimator_fn fixture for when it returns an Estimator
+    (not a TPUEstimator).
