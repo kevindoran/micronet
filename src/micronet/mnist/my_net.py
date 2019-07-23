@@ -15,11 +15,10 @@ import tensorflow.keras
 import tensorflow.keras.layers
 
 gcloud_settings = micronet.gcloud.load_settings()
-gs_bucket_url = 'gs://' + gcloud_settings.bucket_name
-data_dir = gs_bucket_url + '/mnist'
+data_dir = gcloud_settings.bucket_url() + '/mnist'
 # Model dir
-model_root_dir = gs_bucket_url + '/models/mnist'
-mnist_data_dir = gs_bucket_url + '/mnist'
+model_root_dir = gcloud_settings.bucket_url() + '/models/mnist'
+mnist_data_dir = gcloud_settings.bucket_url() + '/mnist'
 now = datetime.datetime.now(pytz.timezone('Japan'))
 timestamp_suffix = now.strftime('%Y%m%dT%H%M%S')
 #model_dir = '{}/kdoran_{}'.format(model_root_dir, timestamp_suffix)
@@ -38,7 +37,6 @@ learning_rate_base = 0.05
 #           model gets updated).
 #     - Every 1024/8 = 128 steps, control would return to the master from the
 #           TPUs. Note: what updates happen here, between the batches?
-
 
 
 def _train_input_fn(mnist_data_dir, batch_size, params):
@@ -226,7 +224,6 @@ def metric_fn(labels, logits):
 def model_fn(features, labels, mode, params):
     del params
     image = features
-    print("Mode is: {}".format(mode))
     model = create_model2(data_format='channels_first')
     # PREDICT
     if mode == tf.estimator.ModeKeys.PREDICT:
