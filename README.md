@@ -7,7 +7,16 @@ Source env:
 
     source venv/bin/activate
 
-Run tests:
+Run all tests:
     
     pytest ./test
+    
+Run tests and signal that there is a TPU available:
+
+    pytest --cloud ./test    
+    
+This should be run only on a Google cloud VM with a TPU available in the READY
+state. 
+
+
 
