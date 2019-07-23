@@ -24,3 +24,11 @@ I'm not sure I understand. My current perspective is making the input to a layer
 highly redundant so that the information is not lost once ReLU is applied. 
 Preserving the information allows for smaller feature vectors (as the 
 information doesn't need to be maintained scattered within a larger model.)
+
+
+TPU performance
+===============
+https://cloud.google.com/tpu/docs/performance-guide
+Batch and feature dimensions will be padded. One of these dimensions will be 
+padded to 8 and the other will be padded to 128. The XLA compiler will choose.
+Best to choose a batch size that is a multiple of 128. 

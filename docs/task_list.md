@@ -25,3 +25,25 @@ long.
 6. Make sure that the input image normalization is identical between training
 and test data; they should be normalized by the same mean and standard 
 deviation.
+
+7. Implement a method to approximate the trainable parameter counting for 
+MobileNetv2.
+
+8. Decide which layers have L2 weight regularization applied.
+
+9. Get RMSPropOptimizer working.
+
+10. Insure the BatchNormalization layer has the correct axis set.
+
+11. Add residuals.
+
+12. Add more checks to test_get_cluster_resolver.
+
+13. Fix the test_micronetv2_model.py's assert for random performance.
+
+14. Factor out some of the testing code that does the steps:
+        evaluate, train, evaluate.
+        
+15. Store tfrecords in the correct dimension. Storing the features in the 
+(32, 32, 3) dimension will avoid a reshape, which is potentially an expensive 
+operation on TPUs. https://cloud.google.com/tpu/docs/performance-guide
