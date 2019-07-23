@@ -4,7 +4,6 @@ import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
 import test.common
 
-
 def test_num_trainable_params():
     """Tests that the model has the expected number of trainable parameters."""
     model = micronet.cifar.linear_model.create_model()
@@ -14,7 +13,7 @@ def test_num_trainable_params():
     assert cifar_linear_model.NUM_TRAINABLE_PARAM == 172900
 
 
-def test_is_trainable(tmpdir):
+def test_is_trainable(estimator_fn):
     """Test that that training and evaluation run as expected.
 
     Tests that:
@@ -24,24 +23,22 @@ def test_is_trainable(tmpdir):
         3. The trained model has higher accuracy (~20%).
     """
     # Setup
-    model_dir = str(tmpdir.mkdir("model"))
-    batch_size = 5
+    batch_size = 8 # Must be divisible by number of replicas (8 for TPU v2)
+    crop_size = 24
     eval_count = 1000
-    eval_steps = eval_count / batch_size
-    assert eval_steps == int(eval_steps)
-    model_fn = micronet.estimator.create_model_fn(
-        keras_model_fn=micronet.cifar.linear_model.create_model,
-        processor_type=micronet.estimator.ProcessorType.CPU)
-    estimator = micronet.estimator.create_cpu_estimator(model_dir, model_fn)
+    eval_steps = int(eval_count / batch_size)
+    assert eval_steps * batch_size == eval_count
+    estimator = estimator_fn(
+        micronet.cifar.linear_model.create_model, batch_size, batch_size)
 
     # Replace with lambda?
     def input_fn(params):
-        del params
-        mini_ds = cifar_ds.train_dataset(augment=False)
+        requested_batch_size = params['batch-size']
+        mini_ds = cifar_ds.train_dataset(augment=False, crop_to=crop_size)
         # Take a small amount and repeat so that the test can show training
         # in a smaller amount of steps (so the test runs quickly).
         mini_ds.take(500).repeat()
-        return mini_ds.batch(batch_size, drop_remainder=True)
+        return mini_ds.batch(requested_batch_size, drop_remainder=True)
 
     # Test
     # 1. Check that the untrained model predicts randomly.

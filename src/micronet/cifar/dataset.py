@@ -19,31 +19,36 @@ EVAL_PERCENTAGE = 10
 train_split = tfds.Split.TRAIN.subsplit(tfds.percent[:TRAIN_PERCENTAGE])
 eval_split = tfds.Split.TRAIN.subsplit(tfds.percent[:EVAL_PERCENTAGE])
 
-IMAGE_SIZE = 24
+DEFAULT_IMAGE_SIZE = 24
+COLOR_CHANNELS = 3 # RGB
+DEFAULT_DATA_SHAPE = (DEFAULT_IMAGE_SIZE, DEFAULT_IMAGE_SIZE, COLOR_CHANNELS)
 # FIXME 1: (switch to uint8)
 DTYPE = tf.float32
+CLASSES = 100
 
 
-def train_dataset(augment):
-    ds = tfds.load(name='cifar100', split=train_split)
-    ds = preprocess(ds, augment)
+def train_dataset(augment, crop_to):
+    ds = tfds.load(name='cifar100', split=train_split, download=False,
+                   data_dir='gs://micronet_bucket1/cifar100')
+                   #data_dir='tmp/cifar100/cifar100')
+    ds = preprocess(ds, augment, crop_to)
     return ds
 
 
-def eval_dataset(augment):
+def eval_dataset(augment, crop_to):
     ds = tfds.load(name='cifar100', split=eval_split)
-    ds = preprocess(ds, augment)
+    ds = preprocess(ds, augment, crop_to)
     return ds
 
 
-def test_dataset(augment):
+def test_dataset(augment, crop_to):
     ds = tfds.load(name='cifar100', split=tfds.Split.TEST)
-    ds = preprocess(ds, augment)
+    ds = preprocess(ds, augment, crop_to)
     return ds
 
 
 # Copied from /tensorflow_models/tutorials/image/cifar10/cifar10_input.py
-def preprocess(dataset, augment):
+def preprocess(dataset, augment, crop_to):
     """Preprocess the images with optional augmentation.
 
     Args:
@@ -70,7 +75,7 @@ def preprocess(dataset, augment):
         tf.ensure_shape(label, shape=())
         if augment:
             # Randomly crop a [height, width] section of the image.
-            img = tf.random_crop(img, [IMAGE_SIZE, IMAGE_SIZE, 3])
+            img = tf.random_crop(img, [crop_to, crop_to, 3])
             # Randomly flip the image horizontally.
             img = tf.image.random_flip_left_right(img)
             # Because these operations are not commutative, consider randomizing
@@ -81,8 +86,7 @@ def preprocess(dataset, augment):
             img = tf.image.random_contrast(img, lower=0.2, upper=1.8)
         else:  # Image processing for evaluation.
             # Crop the central [height, width] of the image.
-            img = tf.image.resize_image_with_crop_or_pad(img, IMAGE_SIZE,
-                                                         IMAGE_SIZE)
+            img = tf.image.resize_image_with_crop_or_pad(img, crop_to, crop_to)
         # Subtract off the mean and divide by the variance of the pixels.
         # FIXME 1: (switch to uint8)
         # FIXME 6: insure consistent standardization.

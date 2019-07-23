@@ -2,7 +2,7 @@ import tensorflow as tf
 import micronet.cifar.dataset as cifar_ds
 
 
-NUM_TRAINABLE_PARAM = 100 * (cifar_ds.IMAGE_SIZE * cifar_ds.IMAGE_SIZE * 3 + 1)
+NUM_TRAINABLE_PARAM = 100 * (cifar_ds.DEFAULT_IMAGE_SIZE * cifar_ds.DEFAULT_IMAGE_SIZE * 3 + 1)
 
 
 def create_model():
@@ -23,7 +23,7 @@ def create_model():
     #    input_shape=(cifar_ds.IMAGE_SIZE, cifar_ds.IMAGE_SIZE, 3)))
 
     model.add(tf.keras.layers.Flatten(
-        input_shape=(cifar_ds.IMAGE_SIZE, cifar_ds.IMAGE_SIZE, 3)
+        input_shape=(cifar_ds.DEFAULT_IMAGE_SIZE, cifar_ds.DEFAULT_IMAGE_SIZE, 3)
     ))
     model.add(tf.keras.layers.Dense(100,
                                     activation='softmax'))

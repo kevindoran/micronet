@@ -25,7 +25,7 @@ def record_count(dataset):
     return count
 
 
-def _check_dataset(ds):
+def _check_dataset(ds, crop_to):
     with tf.Session() as sess:
         ds_iter = ds.make_one_shot_iterator()
         # The records should be a (img, label) tuple.
@@ -39,7 +39,9 @@ def _check_dataset(ds):
         # try to use that format (up until we need to switch channel to be first for
         # running on a GPU).
         # https://www.tensorflow.org/guide/performance/overview#use_nchw_imag
-        assert [cifar_ds.IMAGE_SIZE, cifar_ds.IMAGE_SIZE, 3] == img.shape.as_list()
+        assert [crop_to, crop_to,
+                cifar_ds.COLOR_CHANNELS] == img.shape.as_list()
+        assert cifar_ds.DEFAULT_DATA_SHAPE == img.shape.as_list()
         # FIXME 1: switch to uint8.
         # assert label.dtype == tf.uint8
         assert label.shape == ()
@@ -50,12 +52,21 @@ def _check_dataset(ds):
 
 
 def test_train_dataset():
-    _check_dataset(cifar_ds.train_dataset(augment=False))
+    _check_dataset(
+        cifar_ds.train_dataset(augment=False,
+                               crop_to=cifar_ds.DEFAULT_IMAGE_SIZE),
+        crop_to=cifar_ds.DEFAULT_IMAGE_SIZE)
 
 
 def test_eval_dataset():
-    _check_dataset(cifar_ds.eval_dataset(augment=False))
+    _check_dataset(
+        cifar_ds.eval_dataset(augment=False,
+                              crop_to=cifar_ds.DEFAULT_IMAGE_SIZE),
+        crop_to=cifar_ds.DEFAULT_IMAGE_SIZE)
 
 
 def test_test_dataset():
-    _check_dataset(cifar_ds.test_dataset(augment=False))
+    _check_dataset(
+        cifar_ds.test_dataset(augment=False,
+                              crop_to=cifar_ds.DEFAULT_IMAGE_SIZE),
+        crop_to=cifar_ds.DEFAULT_IMAGE_SIZE)
