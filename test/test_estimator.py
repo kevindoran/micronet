@@ -2,6 +2,7 @@ import pytest
 import micronet.estimator
 import tensorflow as tf
 import functools
+import test.util
 
 # Model copied from:
 # https://github.com/tensorflow/tpu/blob/master/models/experimental/cifar_keras/cifar_keras.py
@@ -9,6 +10,12 @@ import functools
 TRAIN_FILE = 'gs://micronet_bucket1/cifar10_estimator_test/train.tfrecords'
 EVAL_FILE = 'gs://micronet_bucket1/cifar10_estimator_test/eval.tfrecords'
 
+# These step counts and accuracy are used by tests in this file. They are
+# dependent on the keras_model_fn, which is fixed.
+TRAIN_STEPS = 10000
+EVAL_STEPS = 100
+EXPECTED_ACCURACY = 0.7
+NUM_CIFAR10_CLASSES = 10
 
 # This input function is copied from the tensorflow/tpu repository, and thus,
 # is assumed to be working. Although, there is two edits as mentioned in the
@@ -70,31 +77,6 @@ train_input_fn = functools.partial(input_fn, TRAIN_FILE)
 eval_input_fn = functools.partial(input_fn, EVAL_FILE)
 
 
-# FIXME 17: add checks for global_step/sec.
-def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
-                         train_steps: int, eval_steps: int, num_classes: int,
-                         expected_post_train_accuracy: float):
-    # 1. Evaluate using the untrained estimator.
-    results = estimator.evaluate(eval_input_fn, steps=eval_steps)
-    # TODO: make a reusable CDF_inverse function to easily calculate expected
-    # random results.
-    random_chance = 1/num_classes
-    pre_train_bound_factor = 0.5
-    assert random_chance*pre_train_bound_factor \
-           < results['accuracy'] < \
-           random_chance/pre_train_bound_factor
-
-    # 2. Check that the model can be trained.
-    estimator.train(input_fn=train_input_fn, max_steps=train_steps)
-
-    # 3. Check that the model accuracy has increased.
-    results = estimator.evaluate(eval_input_fn, steps=eval_steps)
-    post_train_bound_factor = 0.8
-    assert expected_post_train_accuracy*post_train_bound_factor \
-           < results['accuracy'] < \
-           expected_post_train_accuracy/post_train_bound_factor
-
-
 @pytest.mark.tpu_only
 def test_get_cluster_resolver(gcloud_settings):
     assert gcloud_settings
@@ -118,9 +100,6 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
         5. The estimator accuracy increases after training.
     """
     # Setup
-    train_steps = 10000
-    eval_steps = 100
-    expected_accuracy = 0.7
     cluster_resolver = micronet.estimator.get_cluster_resolver(gcloud_settings)
     run_config = tf.contrib.tpu.RunConfig(
         cluster=cluster_resolver,
@@ -153,10 +132,10 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
     assert estimator
 
     # 3, 4, 5. Test pre-train eval, training and post-train eval.
-    check_train_and_eval(estimator, train_input_fn, eval_input_fn,
-                         train_steps=train_steps, eval_steps=eval_steps,
-                         num_classes=10,
-                         expected_post_train_accuracy=expected_accuracy)
+    test.util.check_train_and_eval(
+        estimator, train_input_fn, eval_input_fn, train_steps=TRAIN_STEPS,
+        eval_steps=EVAL_STEPS, num_classes=NUM_CIFAR10_CLASSES,
+        expected_post_train_accuracy=EXPECTED_ACCURACY)
 
 
 @pytest.mark.tpu_only
@@ -173,11 +152,6 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     """
 
     # Setup.
-    # Chose these to be similar to the test_create_model_fn to insure the
-    # created estimator has similar performance.
-    train_steps = 10000
-    eval_steps = 100
-    expected_accuracy = 0.7
     # Create the estimator compatible model_fn from the Keras model_fn.
     # This method is tested elsewhere.
     model_fn = micronet.estimator.create_model_fn(
@@ -192,7 +166,38 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     assert estimator
 
     # 2, 3, 4. Test pre-train eval, training and post-train eval.
-    check_train_and_eval(estimator, train_input_fn, eval_input_fn,
-                         train_steps=train_steps, eval_steps=eval_steps,
-                         num_classes=10,
-                         expected_post_train_accuracy=expected_accuracy)
+    test.util.check_train_and_eval(
+        estimator, train_input_fn, eval_input_fn, train_steps=TRAIN_STEPS,
+        eval_steps=EVAL_STEPS, num_classes=NUM_CIFAR10_CLASSES,
+        expected_post_train_accuracy=EXPECTED_ACCURACY)
+
+
+# FIXME 20: we also need a test for the non-TPU Estimator case. We need some
+#           sort of test parameterization.
+@pytest.mark.tpu_only
+def test_estimator_fixture(estimator_fn):
+    """Tests that the estimator_fn fixture creates a working estimator factory.
+
+    Tests that:
+        1. estimator_fn is not None, and returns a non-None estimator.
+        2. The estimator is able to evaluate samples.
+        3. The estimator can be trained.
+        4. The estimator accuracy increases after training.
+    """
+    # Setup
+    batch_size = 128
+
+    # Test
+    # 1. estimator_fn shouldn't be None, and shouldn't return None.
+    assert estimator_fn
+    estimator = estimator_fn(keras_model_fn=keras_model_fn,
+                             train_batch_size=batch_size,
+                             eval_batch_size=batch_size)
+    assert estimator
+
+    # 2, 3, 4 Eval and train work.
+    test.util.check_train_and_eval(
+        estimator, train_input_fn, eval_input_fn, train_steps=TRAIN_STEPS,
+        eval_steps=EVAL_STEPS, num_classes=NUM_CIFAR10_CLASSES,
+        expected_post_train_accuracy=EXPECTED_ACCURACY)
+
