@@ -1,10 +1,8 @@
-import tensorflow as ft
 import numpy as np
 
 # TODO: why isn't there an exposed way of doing this?
 #       I suppose the Backend is exposed. The name is just off-putting. I'll
 #       leave the code here for now, as it is enlightening.
-
 
 # Copied from:https://github.com/keras-team/keras/blob/master/keras/backend/tensorflow_backend.py
 def _int_shape(x):

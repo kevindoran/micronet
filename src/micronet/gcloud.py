@@ -11,6 +11,9 @@ class CloudSettings:
         self.tpu_zone = tpu_zone
         self.bucket_name = bucket_name
 
+    def bucket_url(self):
+        return 'gs://' + self.bucket_name
+
 
 def load_settings(settings_file=default_settings_file):
     with open(settings_file) as f:
