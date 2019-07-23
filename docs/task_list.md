@@ -47,3 +47,14 @@ MobileNetv2.
 15. Store tfrecords in the correct dimension. Storing the features in the 
 (32, 32, 3) dimension will avoid a reshape, which is potentially an expensive 
 operation on TPUs. https://cloud.google.com/tpu/docs/performance-guide
+
+16.Implement the test 'A warning is raised if batch size is not divisible by 
+   128'. This is for test_estimator.py.
+   
+17. Add checks for global_steps/sec in test_estimator.py. This is motivated by
+the create_tpu_estimator() method creating an estimator that operates slower
+that the one copied from tensorflow/tpu repo example.
+
+18. Check out why the TPU is becoming 'Unhealthy' when multiple TPU tests are
+collected in a single pytest run. Could be a timing issue (maybe there is a 
+need to introduce a delay between tests that use TPUs).

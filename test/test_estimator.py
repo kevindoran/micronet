@@ -10,6 +10,9 @@ TRAIN_FILE = 'gs://micronet_bucket1/cifar10_estimator_test/train.tfrecords'
 EVAL_FILE = 'gs://micronet_bucket1/cifar10_estimator_test/eval.tfrecords'
 
 
+# This input function is copied from the tensorflow/tpu repository, and thus,
+# is assumed to be working. Although, there is two edits as mentioned in the
+# comments below.
 def keras_model_fn():
     """Define a CIFAR model in Keras."""
     layers = tf.keras.layers
@@ -32,7 +35,8 @@ def keras_model_fn():
     return model
 
 
-# Using the copied version for the
+# This input function is copied from the tensorflow/tpu repository, and thus,
+# is assumed to be working.
 def input_fn(input_file, params):
     """Read CIFAR input data from a TFRecord dataset."""
     def parser(serialized_example):
@@ -61,35 +65,34 @@ def input_fn(input_file, params):
     dataset = dataset.prefetch(1)
     return dataset
 
+
 train_input_fn = functools.partial(input_fn, TRAIN_FILE)
 eval_input_fn = functools.partial(input_fn, EVAL_FILE)
 
 
-# def model_fn(features, labels, mode, params):
-#     # Instead of constructing a Keras model for training, build our loss function
-#     # and optimizer in Tensorflow.
-#     #
-#     # N.B.  This construction omits some features that are important for more
-#     # complex models (e.g. regularization, batch-norm).  Once
-#     # `model_to_estimator` support is added for TPUs, it should be used instead.
-#     loss = tf.reduce_mean(
-#         tf.nn.sparse_softmax_cross_entropy_with_logits(
-#             logits=logits, labels=labels
-#         )
-#     )
-#     optimizer = tf.train.AdamOptimizer()
-#     optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
-#     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
-#
-#     return tf.contrib.tpu.TPUEstimatorSpec(
-#         mode=mode,
-#         loss=loss,
-#         train_op=train_op,
-#         predictions={
-#             "classes": tf.argmax(input=logits, axis=1),
-#             "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
-#         }
-#     )
+# FIXME 17: add checks for global_step/sec.
+def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
+                         train_steps: int, eval_steps: int, num_classes: int,
+                         expected_post_train_accuracy: float):
+    # 1. Evaluate using the untrained estimator.
+    results = estimator.evaluate(eval_input_fn, steps=eval_steps)
+    # TODO: make a reusable CDF_inverse function to easily calculate expected
+    # random results.
+    random_chance = 1/num_classes
+    pre_train_bound_factor = 0.5
+    assert random_chance*pre_train_bound_factor \
+           < results['accuracy'] < \
+           random_chance/pre_train_bound_factor
+
+    # 2. Check that the model can be trained.
+    estimator.train(input_fn=train_input_fn, max_steps=train_steps)
+
+    # 3. Check that the model accuracy has increased.
+    results = estimator.evaluate(eval_input_fn, steps=eval_steps)
+    post_train_bound_factor = 0.8
+    assert expected_post_train_accuracy*post_train_bound_factor \
+           < results['accuracy'] < \
+           expected_post_train_accuracy/post_train_bound_factor
 
 
 @pytest.mark.tpu_only
@@ -115,7 +118,9 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
         5. The estimator accuracy increases after training.
     """
     # Setup
+    train_steps = 10000
     eval_steps = 100
+    expected_accuracy = 0.7
     cluster_resolver = micronet.estimator.get_cluster_resolver(gcloud_settings)
     run_config = tf.contrib.tpu.RunConfig(
         cluster=cluster_resolver,
@@ -132,6 +137,7 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
     # 1. Create the model_fn via create_model_fn().
     model_fn = micronet.estimator.create_model_fn(
         keras_model_fn, processor_type=micronet.estimator.ProcessorType.TPU)
+    assert model_fn
 
     # 2. Construct a TPUEstimator.
     estimator = tf.contrib.tpu.TPUEstimator(
@@ -144,19 +150,49 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
         export_to_tpu=False)
         # export_to_cpu doesn't seem to be released as of tf 1.13.1.
         # export_to_cpu=False)
+    assert estimator
 
-    # 3. Evaluate using the untrained estimator.
-    results = estimator.evaluate(eval_input_fn, steps=eval_steps)
-    # TODO: make a reusable CDF_inverse function to easily calculate expected
-    # random results.
-    classes = 10
-    random_chance = 1/classes
-    assert random_chance/2 < results['accuracy'] < random_chance*2
+    # 3, 4, 5. Test pre-train eval, training and post-train eval.
+    check_train_and_eval(estimator, train_input_fn, eval_input_fn,
+                         train_steps=train_steps, eval_steps=eval_steps,
+                         num_classes=10,
+                         expected_post_train_accuracy=expected_accuracy)
 
-    # 4. Check that the model can be trained.
-    estimator.train(input_fn=train_input_fn, max_steps=10000)
 
-    # 5. Check that the model accuracy has increased.
-    results = estimator.evaluate(eval_input_fn, steps=eval_steps)
-    min_threshold = 0.65
-    assert min_threshold < results['accuracy']
+@pytest.mark.tpu_only
+def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
+    """Tests that create_tpu_estimator() creates a usable TPUEstimator.
+
+    Tests that:
+        1. create_tpu_estimator() runs without error.
+        2. The estimator is able to evaluate samples.
+        3. The estimator can be trained.
+        4. The estimator accuracy increases after training.
+        5. FIXME 16: implement the test 'A warning is raised if batch size is
+                     not divisible by 128'.
+    """
+
+    # Setup.
+    # Chose these to be similar to the test_create_model_fn to insure the
+    # created estimator has similar performance.
+    train_steps = 10000
+    eval_steps = 100
+    expected_accuracy = 0.7
+    # Create the estimator compatible model_fn from the Keras model_fn.
+    # This method is tested elsewhere.
+    model_fn = micronet.estimator.create_model_fn(
+        keras_model_fn, processor_type=micronet.estimator.ProcessorType.TPU)
+    batch_size = 128
+
+    # Test
+    # 1. Create an estimator without error.
+    estimator = micronet.estimator.create_tpu_estimator(
+        gcloud_settings, gcloud_temp_path, model_fn,
+        train_batch_size=batch_size, eval_batch_size=batch_size)
+    assert estimator
+
+    # 2, 3, 4. Test pre-train eval, training and post-train eval.
+    check_train_and_eval(estimator, train_input_fn, eval_input_fn,
+                         train_steps=train_steps, eval_steps=eval_steps,
+                         num_classes=10,
+                         expected_post_train_accuracy=expected_accuracy)

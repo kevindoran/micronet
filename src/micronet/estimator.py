@@ -6,7 +6,10 @@ import micronet
 # Number of iterations to run on the TPU workers before returning control to the
 # master (not sure if the terminology is correct here).
 # What is a good number? What does it depend on?
-iterations_between_model_update = 16
+# For the test_estimator.py tests using the test model, training was almost
+# twice as fast using iterations_between_model_update set to 100 as opposed to
+# set at 16. Just a data point. Still not sure how the number should be chosen.
+iterations_between_model_update = 100
 checkpoints_max = 0
 
 ProcessorType = Enum('ProcessorType', 'CPU, GPU, TPU')
@@ -25,6 +28,13 @@ def get_cluster_resolver(gcloud_settings):
 def create_tpu_estimator(gcloud_settings, model_dir, model_fn, train_batch_size,
                          eval_batch_size):
     tpu_cluster_resolver = get_cluster_resolver(gcloud_settings)
+    if train_batch_size % 128:
+        raise Warning('Train batch size should be divisible by 128 as the XLA '
+                      'compiler will likely pad the batch size to 128.')
+    if eval_batch_size % 128:
+        raise Warning('If evaluating on a TPU, eval batch size should be '
+                      'divisible by 128 as the XLA compiler will likely pad '
+                      'the batch size to 128.')
 
     run_config = tf.contrib.tpu.RunConfig(
         cluster=tpu_cluster_resolver,
