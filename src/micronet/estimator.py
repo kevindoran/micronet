@@ -3,13 +3,17 @@ from enum import Enum
 import functools
 import micronet
 
-# Number of iterations to run on the TPU workers before returning control to the
-# master (not sure if the terminology is correct here).
+# Number of iterations (batches) to run on the TPU workers before returning
+# control to the master (not sure if the terminology is correct here).
 # What is a good number? What does it depend on?
 # For the test_estimator.py tests using the test model, training was almost
 # twice as fast using iterations_between_model_update set to 100 as opposed to
 # set at 16. Just a data point. Still not sure how the number should be chosen.
-iterations_between_model_update = 100
+# From: https://cloud.google.com/tpu/docs/troubleshooting
+#    "iterations_per_loop can be set to a very large value, with the only
+#    downside being that logging messages and checkpointing can only occur at
+#    the end of a loop."
+ITERATIONS_PER_LOOP = 100
 checkpoints_max = 0
 
 ProcessorType = Enum('ProcessorType', 'CPU, GPU, TPU')
@@ -50,7 +54,7 @@ def create_tpu_estimator(gcloud_settings, model_dir, model_fn, train_batch_size,
             # increased `iterations_per_loop` times in one `Session.run`. It is
             # recommended to be set as number of global steps between each
             # checkpoint.
-            iterations_per_loop=iterations_between_model_update,
+            iterations_per_loop=ITERATIONS_PER_LOOP,
             # Deprecated: num_shards,
             # num_cores_per_replica:  Useful? Used for model parallelism.
             # per_host_input_for_training: No idea what this is.
@@ -130,7 +134,8 @@ def create_train_op(loss, processor_type):
     # MobileNetv2 paper uses RMSPropOptimizer with decay and momentum as 0.9.
     # RMSProp doesn't seem to be working for me on CPU or TPU.
     #optimizer = tf.train.RMSPropOptimizer(learning_rate_base, decay=0.90, momentum=0.9)
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    #optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.AdamOptimizer()
     if processor_type == ProcessorType.TPU:
         optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
     # TODO: is this the correct value for the step argument?
