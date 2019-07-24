@@ -3,6 +3,7 @@ import micronet.models.mobilenetv2 as mobilenetv2
 import micronet.models.xiaochus_mobilenetv2 as xiaochus_mobilenetv2
 import micronet.cifar.dataset as cifar_ds
 import micronet.estimator
+import tensorflow as tf
 import test.util
 
 
@@ -24,14 +25,25 @@ def keras_model_fn():
                                      classes=cifar_ds.CLASSES)
     return model
 
+
 def xiaochus_model_fn():
     model = xiaochus_mobilenetv2.MobileNetv2(input_shape=cifar_ds.DEFAULT_DATA_SHAPE,
                                              k=cifar_ds.CLASSES)
     return model
 
 
+@pytest.fixture
+def cifar_dataset_fn(request):
+    is_cloud = request.config.getoption('--cloud', default=False)
+
+    def dataset_fn():
+        ds = cifar_ds.train_dataset(cloud_storage=is_cloud)
+        return ds
+    return dataset_fn
+
+
 # TODO: mostly copied from test_cifar_linear_model. Could be factored a bit.
-def test_is_trainable(estimator_fn):
+def test_is_trainable(estimator_fn, cifar_dataset_fn):
     """Test that that training and evaluation run as expected.
 
     Tests that:
@@ -43,47 +55,38 @@ def test_is_trainable(estimator_fn):
     # Setup
     batch_size = 128
     eval_count = 1024
-    train_steps = batch_size*1000
-    eval_steps = int(eval_count / batch_size)
+    train_steps = int(4.5 * 1000 * 1000)
+    eval_steps = 8# int(eval_count / batch_size)
     assert eval_steps * batch_size == eval_count
     # Errors due to ops being created in loops:
-    #estimator = estimator_fn(xiaochus_model_fn, batch_size, batch_size)
-    estimator = estimator_fn(keras_model_fn, batch_size, batch_size)
+    estimator = estimator_fn(xiaochus_model_fn, batch_size, batch_size)
+    #estimator = estimator_fn(keras_model_fn, batch_size, batch_size)
 
-    # Replace with lambda?
+    # TODO: Move to cifar.dataset
     def input_fn(params):
-        del params
-        mini_ds = cifar_ds.train_dataset(augment=False, crop_to=32)
-        # Take a small amount and repeat so that the test can show progress
-        # in a smaller amount of steps (so the test runs quickly).
-        #mini_ds = mini_ds.take(500)
-        mini_ds = mini_ds.repeat()
-        return mini_ds.batch(batch_size, drop_remainder=True)
+        ds = cifar_dataset_fn()
+        map_fn = cifar_ds.preprocess_fn(augment=False,
+                                        crop_to=cifar_ds.MAX_IMAGE_SIZE)
+        # I'm not exactly sure what is best here for performance.
+        # TODO: consider using map_and_batch.
+        # When to repeat?
+        ds = ds.repeat()
+        # When to cache?
+        ds = ds.cache()
+        # Why this initial prefetch?
+        ds = ds.prefetch(params['batch_size'])
+        # Replacing map and batch with the map_and_batch.
+        # ds = ds.batch(params['batch_size'], drop_remainder=True)
+        vcpu_count = 2
+        ds = ds.apply(tf.contrib.data.map_and_batch(
+            map_func=map_fn, batch_size=params['batch_size'],
+            drop_remainder=True, num_parallel_calls=vcpu_count))
+        ds = ds.prefetch(micronet.estimator.ITERATIONS_PER_LOOP)
+        return ds
 
-    # Test
-    # 1. Check that the untrained model predicts randomly.
-    #
-    # I want the test to pass 99% of the time.
-    # For a 1000 trial experiment with success probability of 1% (100 classes),
-    # CDF_inverse(0.01) ~= 3
-    # CDF_inverse(0.99) ~= 19
-    # (from binomial dist calculator:
-    #      https://www.di-mgt.com.au/binomial-calculator.html)
-    # TODO: is it valid to assume a random output from the untrained model?
-    results = estimator.evaluate(input_fn, steps=eval_steps)
-    # FIXME 13: I think accuracy is a %, so this check seems wrong.
-    assert 3/eval_count < results['accuracy'] <= 19/eval_count
 
-    # 2. Check that the model can be trained.
-    estimator.train(input_fn, max_steps=train_steps)
-
-    # 3. Check that the training has increased the model's accuracy.
-    # Results is a dict containing the metrics defined by the model_fn.
-    # FIXME 4: I should encapsulate/separate the metric creation so that it
-    #          is easy to assume that certain metrics are present.
-    results = estimator.evaluate(input_fn, steps=eval_steps)
-    # We should expect some improvement over the random case, 1/100. Running
-    # it a few times gave ~4.5%, so using a value a little lower to make sure
-    # the test reliably passes (while still being useful).
-    print('accuracy: {}'.format(results['accuracy']))
-    assert results['accuracy'] >= 0.040
+    # 1, 2, 3
+    expected_accuracy = 0.5
+    test.util.check_train_and_eval(
+        estimator, input_fn, input_fn, train_steps, eval_steps, num_classes=100,
+        expected_post_train_accuracy=expected_accuracy)

@@ -71,9 +71,9 @@ def _check_dataset(ds, crop_to):
         # try to use that format (up until we need to switch channel to be first for
         # running on a GPU).
         # https://www.tensorflow.org/guide/performance/overview#use_nchw_imag
-        assert [crop_to, crop_to,
-                cifar_ds.COLOR_CHANNELS] == img.shape.as_list()
-        assert cifar_ds.DEFAULT_DATA_SHAPE == img.shape.as_list()
+        assert (crop_to, crop_to,
+                cifar_ds.COLOR_CHANNELS) == tuple(img.shape.as_list())
+        assert cifar_ds.DEFAULT_DATA_SHAPE == tuple(img.shape.as_list())
         # FIXME 1: switch to uint8.
         # assert label.dtype == tf.uint8
         assert label.shape == ()
@@ -84,24 +84,24 @@ def _check_dataset(ds, crop_to):
 
 
 def test_train_dataset():
-    _check_dataset(
-        cifar_ds.train_dataset(augment=False,
-                               crop_to=cifar_ds.DEFAULT_IMAGE_SIZE),
-        crop_to=cifar_ds.DEFAULT_IMAGE_SIZE)
+    crop = cifar_ds.DEFAULT_IMAGE_SIZE
+    ds = cifar_ds.train_dataset().map(cifar_ds.preprocess_fn(augment=False,
+                                                             crop_to=crop))
+    _check_dataset(ds, crop)
 
 
 def test_eval_dataset():
-    _check_dataset(
-        cifar_ds.eval_dataset(augment=False,
-                              crop_to=cifar_ds.DEFAULT_IMAGE_SIZE),
-        crop_to=cifar_ds.DEFAULT_IMAGE_SIZE)
+    crop = cifar_ds.DEFAULT_IMAGE_SIZE
+    ds = cifar_ds.eval_dataset().map(cifar_ds.preprocess_fn(augment=False,
+                                                            crop_to=crop))
+    _check_dataset(ds, crop)
 
 
 def test_test_dataset():
-    _check_dataset(
-        cifar_ds.test_dataset(augment=False,
-                              crop_to=cifar_ds.DEFAULT_IMAGE_SIZE),
-        crop_to=cifar_ds.DEFAULT_IMAGE_SIZE)
+    crop = cifar_ds.DEFAULT_IMAGE_SIZE
+    ds = cifar_ds.test_dataset().map(cifar_ds.preprocess_fn(augment=False,
+                                                            crop_to=crop))
+    _check_dataset(ds, crop)
 
 
 # FIXME 20: we should make this run both for the standard and TPU estimator.
@@ -143,7 +143,8 @@ def test_with_estimator(estimator_fn):
         # cannot take a Dataset as a parameter, it must take a factory.
         # Otherwise, the dataset will be created outside of the training/eval
         # session.
-        ds = ds_fn(augment=False, crop_to=crop_to, cloud_storage=True)
+        ds = ds_fn(cloud_storage=True)
+        ds = ds.map(cifar_ds.preprocess_fn(augment=True, crop_to=crop_to))
         return ds.cache().repeat().batch(batch_size, drop_remainder=True)\
             .prefetch(1)
 

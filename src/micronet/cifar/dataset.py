@@ -34,7 +34,7 @@ DTYPE = tf.float32
 CLASSES = 100
 
 
-def train_dataset(augment, crop_to, cloud_storage=False):
+def train_dataset(cloud_storage=False):
     # Note: is this if-else compatible with TPU's input pipeline requirements?
     # I saw a mention that some types of branching are not supported.
     if cloud_storage:
@@ -42,32 +42,29 @@ def train_dataset(augment, crop_to, cloud_storage=False):
                        data_dir=_CLOUD_DATA_DIR)
     else:
         ds = tfds.load(name='cifar100', split=train_split)
-    ds = preprocess(ds, augment, crop_to)
     return ds
 
 
-def eval_dataset(augment, crop_to, cloud_storage=False):
+def eval_dataset(cloud_storage=False):
     if cloud_storage:
         ds = tfds.load(name='cifar100', split=eval_split, download=False,
                        data_dir=_CLOUD_DATA_DIR)
     else:
         ds = tfds.load(name='cifar100', split=eval_split)
-    ds = preprocess(ds, augment, crop_to)
     return ds
 
 
-def test_dataset(augment, crop_to, cloud_storage=False):
+def test_dataset(cloud_storage=False):
     if cloud_storage:
         ds = tfds.load(name='cifar100', split=tfds.Split.TEST, download=False,
                        data_dir=_CLOUD_DATA_DIR)
     else:
         ds = tfds.load(name='cifar100', split=tfds.Split.TEST)
-    ds = preprocess(ds, augment, crop_to)
     return ds
 
 
 # Copied from /tensorflow_models/tutorials/image/cifar10/cifar10_input.py
-def preprocess(dataset, augment, crop_to):
+def preprocess_fn(augment, crop_to):
     """Preprocess the images with optional augmentation.
 
     Args:
@@ -112,8 +109,4 @@ def preprocess(dataset, augment, crop_to):
         img = tf.image.per_image_standardization(img)
         return img, label
 
-    dataset = dataset.map(map_fn, num_parallel_calls=10) # num_parallel_calls=10, what does this do?
-    # Dataset is small enough to be fully loaded on memory:
-    # This should probably be just done by clients.
-    # dataset = dataset.prefetch(-1)
-    return dataset
+    return map_fn
