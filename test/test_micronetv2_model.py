@@ -43,7 +43,7 @@ def cifar_dataset_fn(request):
 
 
 # TODO: mostly copied from test_cifar_linear_model. Could be factored a bit.
-def test_is_trainable(estimator_fn, cifar_dataset_fn):
+def test_is_trainable(estimator_fn, cifar_dataset_fn, is_cloud):
     """Test that that training and evaluation run as expected.
 
     Tests that:
@@ -53,10 +53,15 @@ def test_is_trainable(estimator_fn, cifar_dataset_fn):
         3. The trained model has higher accuracy (~20%).
     """
     # Setup
-    batch_size = 128
-    eval_count = 1024
-    train_steps = int(4.5 * 1000 * 1000)
-    eval_steps = 8# int(eval_count / batch_size)
+    if is_cloud:
+        batch_size = 128
+        eval_count = 1024
+        train_steps = int(4.5 * 1000 * 1000)
+    else:
+        batch_size = 64
+        eval_count = 256
+        train_steps = 10
+    eval_steps = int(eval_count / batch_size)
     assert eval_steps * batch_size == eval_count
     # Errors due to ops being created in loops:
     estimator = estimator_fn(xiaochus_model_fn, batch_size, batch_size)
@@ -64,6 +69,10 @@ def test_is_trainable(estimator_fn, cifar_dataset_fn):
 
     # TODO: Move to cifar.dataset
     def input_fn(params):
+        # Only the TPUEstimator needs to pass batch_size to the input_fn.
+        if 'batch_size' in params:
+            assert params['batch_size'] == batch_size
+        del params
         ds = cifar_dataset_fn()
         map_fn = cifar_ds.preprocess_fn(augment=False,
                                         crop_to=cifar_ds.MAX_IMAGE_SIZE)
@@ -74,12 +83,12 @@ def test_is_trainable(estimator_fn, cifar_dataset_fn):
         # When to cache?
         ds = ds.cache()
         # Why this initial prefetch?
-        ds = ds.prefetch(params['batch_size'])
+        ds = ds.prefetch(batch_size)
         # Replacing map and batch with the map_and_batch.
         # ds = ds.batch(params['batch_size'], drop_remainder=True)
         vcpu_count = 2
         ds = ds.apply(tf.contrib.data.map_and_batch(
-            map_func=map_fn, batch_size=params['batch_size'],
+            map_func=map_fn, batch_size=batch_size,
             drop_remainder=True, num_parallel_calls=vcpu_count))
         ds = ds.prefetch(micronet.estimator.ITERATIONS_PER_LOOP)
         return ds

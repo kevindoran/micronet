@@ -213,7 +213,6 @@ def _model_fn(keras_model_fn, processor_type, features, labels, mode, params):
         # FIXME X: how to return either TPU or non TPU estimator spec?
         estimator_spec = tf.contrib.tpu.TPUEstimatorSpec(mode, loss=loss_op,
                                                          train_op=train_op)
-        return estimator_spec
     elif mode == tf.estimator.ModeKeys.EVAL:
         # TODO: What does the training option do?
         #logit_outputs = keras_model_fn()(image, training=False)
@@ -230,12 +229,10 @@ def _model_fn(keras_model_fn, processor_type, features, labels, mode, params):
         estimator_spec = tf.contrib.tpu.TPUEstimatorSpec(
             mode=mode, loss=loss_op,
             eval_metrics=(metric_fn, [labels, logit_outputs]))
-        return estimator_spec
     elif mode == tf.estimator.ModeKeys.PREDICT:
         raise Exception('Unsupported.')
     else:
         raise Exception('unexpected mode: {}'.format(mode))
-    # TODO
-    #if processor_type == ProcessorType.CPU:
-    #    estimator_spec = estimator_spec.as_estimator_spec()
+    if processor_type == ProcessorType.CPU:
+        estimator_spec = estimator_spec.as_estimator_spec()
     return estimator_spec

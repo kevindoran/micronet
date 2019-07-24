@@ -19,6 +19,12 @@ def pytest_runtest_setup(item):
 
 
 @pytest.fixture
+def is_cloud(request):
+    is_cloud = request.config.getoption('--cloud', default=False)
+    return is_cloud
+
+
+@pytest.fixture
 def gcloud_settings(request):
     return micronet.gcloud.load_settings()
 
@@ -43,7 +49,7 @@ def gcloud_temp_path(request, gcloud_settings):
 
 
 @pytest.fixture
-def estimator_fn(request, tmpdir, gcloud_temp_path):
+def estimator_fn(is_cloud, tmpdir, gcloud_temp_path):
     """Creates and returns a factory that creates a TPUEstimator or Estimator.
 
     Refer to the nested factory function below for the signature of the returned
@@ -53,7 +59,6 @@ def estimator_fn(request, tmpdir, gcloud_temp_path):
         * test_estimator.test_estimator_fixture (for TPUEstimator).
         * FIXME: this also needs a test for the standard Estimator.
     """
-    is_cloud = request.config.getoption('--cloud', default=False)
     use_tpu = is_cloud
     if use_tpu:
         model_dir = gcloud_temp_path

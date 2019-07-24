@@ -33,14 +33,17 @@ def test_is_trainable(estimator_fn):
 
     # Replace with lambda?
     def input_fn(params):
-        requested_batch_size = params['batch-size']
+        # Only the TPUEstimator needs to pass batch_size to the input_fn.
+        if 'batch_size' in params:
+            assert params['batch_size'] == batch_size
+        del params
         mini_ds = cifar_ds.train_dataset()
         mini_ds = mini_ds.map(
             cifar_ds.preprocess_fn(augment=False, crop_to=crop_size))
         # Take a small amount and repeat so that the test can show training
         # in a smaller amount of steps (so the test runs quickly).
         mini_ds.take(500).repeat()
-        return mini_ds.batch(requested_batch_size, drop_remainder=True)
+        return mini_ds.batch(batch_size, drop_remainder=True)
 
     # Test
     # 1. Check that the untrained model predicts randomly.
