@@ -28,9 +28,17 @@ def gcloud_temp_path(request, gcloud_settings):
     now = datetime.datetime.now(pytz.timezone('Japan'))
     timestamp_suffix = now.strftime('%Y%m%dT%H%M%S')
     #test_name = request.node.name.replace('.', '_')
-    test_name = request.node.name
-    temp_path = '{}/pytest/{}/{}'.format(gcloud_settings.bucket_url(), test_name,
-                                         timestamp_suffix)
+    # Previously using node.name, however, more context helps understand the
+    # location of the test when viewing the results in tensorflow.
+    # test_name = request.node.name
+    # Instead, try using the details in node.location. I'm not 100% sure what
+    # identifier will be. It is the test name for tests that are not within a
+    # class.
+    file, line_no, identifier = request.node.location
+    temp_path = '{bucket}/pytest/{file}/{test_id}/{timestamp}'.format(
+        bucket=gcloud_settings.bucket_url(), file=file, test_id=identifier,
+        timestamp=timestamp_suffix)
+    temp_path = temp_path.replace('.py', '_py')
     return temp_path
 
 
@@ -46,13 +54,11 @@ def estimator_fn(request, tmpdir, gcloud_temp_path):
         * FIXME: this also needs a test for the standard Estimator.
     """
     is_cloud = request.config.getoption('--cloud', default=False)
-    use_tpu = True #is_cloud
-
-
-    model_dir = gcloud_temp_path + '/tensorflow_model'
-
+    use_tpu = is_cloud
     if use_tpu:
-        model_dir = gcloud_temp_path + '/tensorflow_model'
+        model_dir = gcloud_temp_path
+        # Don't need this sub-dir (yet).
+        # model_dir += '/tensorflow_model'
     else:
         model_dir = str(tmpdir.mkdir('model'))
 
