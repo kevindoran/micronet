@@ -16,3 +16,7 @@ src/micronet.egg-info/
 
 # Pycache folders
 __pycache__/
+
+# Large files in ./resources
+resources/
+
