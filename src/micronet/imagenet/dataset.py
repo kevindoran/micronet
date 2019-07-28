@@ -141,7 +141,7 @@ def preprocess_fn(is_training, crop_to=DEFAULT_IMAGE_SIZE):
         tensors = decoder.decode(record, items)
         record = dict(zip(items, tensors))
         img = record['image']
-        label = record['label']
+        label = record['label'] - CLASS_START_INDEX
         distorted_img = slim_preprocessing.preprocess_image(
             img, height=crop_to, width=crop_to, is_training=is_training)
         return distorted_img, label

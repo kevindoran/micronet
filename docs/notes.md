@@ -32,3 +32,32 @@ https://cloud.google.com/tpu/docs/performance-guide
 Batch and feature dimensions will be padded. One of these dimensions will be 
 padded to 8 and the other will be padded to 128. The XLA compiler will choose.
 Best to choose a batch size that is a multiple of 128. 
+
+
+Troubleshooting
+===============
+Possible solutions to problems.
+
+1. "Shape must have fixed size for dimension 0"
+-----------------------------------------------
+If you encounter this problem when running estimator.evaluate() or estimator.train(), one mistake that can cause this
+issue is calling dataset.batch(batch_size) instead of calling dataset.batch(batch_size, drop_remainder=True), while
+running on a TPU. Without the drop_remainder, the dataset example size cannot be guaranteed, and it becomes 'None' 
+hence the error.
+
+      dims = shape.as_list()
+      if dims[self._shard_dimension] is None:
+        raise ValueError("shape %s must have a fixed size for dimension %d "
+                         "that is known at graph construction time." %
+>                        (shape.as_list(), self._shard_dimension))
+E       ValueError: shape [None, 224, 224, 3] must have a fixed size for dimension 0 that is known at graph construction time.
+
+../venv/lib/python3.5/site-packages/tensorflow/contrib/tpu/python/tpu/tpu_sharding.py:183: ValueError
+
+
+2. NaN value when run on TPU
+----------------------------
+Running networks on a TPU generate NaN errors more often than running them on a CPU. Sometimes, this seems to just be
+a result of other errors being uncaught on the TPU. For example, an NaN error was encountered on a TPU. Running the
+same program with a CPU produced a clear error stating that an example label was out of the expected [0, 1000) range. 
+Fixing this issue and running on a TPU lead to no errors.  

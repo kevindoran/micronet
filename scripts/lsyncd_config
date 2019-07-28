@@ -1,6 +1,10 @@
 settings {
     nodaemon = true, -- Run in foreground.
 }
+-- "tensorflow_models" is currently ignored, however, it needs to be synced _once_.
+-- I'm not sure how to enable a one-time copy. The syncing needs to be disabled 
+-- after the first sync, as my OS doesn't have enough inode_watchers available for
+-- running both the sync and other applications such as pycharm.
 sync {
     default.rsyncssh,
     source="/home/k/projects/micronet",

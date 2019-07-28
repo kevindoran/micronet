@@ -75,7 +75,7 @@ def test_with_estimator(estimator_fn):
         del params
         ds = imagenet_ds.train_dataset().map(
             imagenet_ds.preprocess_fn(is_training=True))
-        ds = ds.batch(batch_size)
+        ds = ds.batch(batch_size, drop_remainder=True)
         return ds
 
     # Test
