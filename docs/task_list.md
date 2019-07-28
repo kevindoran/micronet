@@ -74,3 +74,9 @@ local drive.
 22. Create propper assert near that accounts for the [0, 1] probability bound.
 
 23. Inspect overfitting with test_cifar_dataset.py's test_with_estimator test.
+
+24. Switch to AdafactorOptimizer as noted in tpu troubleshooting docs.
+    https://cloud.google.com/tpu/docs/troubleshooting
+    
+25. Enable live logging in pytest so as to investigate performance such as
+issues.

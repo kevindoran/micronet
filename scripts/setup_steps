@@ -42,6 +42,11 @@ gcloud auth application-default login
 # With tensorboard running on the VM, you can connect your local port to the 
 # remote port with:
 gcloud compute ssh kdoran1 --ssh-flag="-N -f -L localhost:12345:localhost:6006"
+# Alternatively, you can run from local machine.
+# First, install google-cloud-storage:
+pip install --upgrade google-cloud-storage
+tensorboard --logdir='gs://micronet_bucket1/...'
+
 
 # On the VM, you need to create a `catputer-tpu-profile` script by running the
 # below command. (why on earth is this needed like this...)
