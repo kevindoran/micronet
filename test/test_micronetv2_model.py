@@ -54,9 +54,9 @@ def test_is_trainable(estimator_fn, cifar_dataset_fn, is_cloud):
     """
     # Setup
     if is_cloud:
-        batch_size = 128
+        batch_size = 1024 # (128 per cores, 8 cores).
         eval_count = 1024
-        train_steps = int(4.5 * 1000 * 1000)
+        train_steps = int(0.5 * 1000 * 1000)
     else:
         batch_size = 64
         eval_count = 256
@@ -86,10 +86,12 @@ def test_is_trainable(estimator_fn, cifar_dataset_fn, is_cloud):
         ds = ds.prefetch(batch_size)
         # Replacing map and batch with the map_and_batch.
         # ds = ds.batch(params['batch_size'], drop_remainder=True)
-        vcpu_count = 2
+        vcpu_count = 16
         ds = ds.apply(tf.contrib.data.map_and_batch(
             map_func=map_fn, batch_size=batch_size,
             drop_remainder=True, num_parallel_calls=vcpu_count))
+        # Cache here too?
+        ds = ds.cache()
         ds = ds.prefetch(micronet.estimator.ITERATIONS_PER_LOOP)
         return ds
 

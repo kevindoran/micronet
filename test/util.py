@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 """
 Everything here is imported into the __init__.py. It's sufficient to import
@@ -72,6 +73,35 @@ def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
            < results['accuracy'] < \
            expected_post_train_accuracy/post_train_bound_factor
 
+
+def test_keras_fn(input_shape, num_classes):
+
+    # This input function is an edited version of a the model function from:
+    # https://github.com/tensorflow/tpu/blob/master/models/experimental/cifar_keras/cifar_keras.py
+    def keras_model_fn():
+        """Define a CIFAR model in Keras."""
+        layers = tf.keras.layers
+        # Pass our input tensor to initialize the Keras input layer.
+        # Edited:
+        # v = layers.Input(tensor=input_features)
+        input_layer = layers.Input(shape=input_shape)
+        v = layers.Conv2D(filters=32, kernel_size=5,
+                          activation="relu", padding="same")(input_layer)
+        v = layers.MaxPool2D(pool_size=2, name='maxPool1')(v)
+        v = layers.Conv2D(filters=64, kernel_size=5,
+                          activation="relu", padding="same")(v)
+        v = layers.MaxPool2D(pool_size=2, name='maxPool2')(v)
+        v = layers.Flatten()(v)
+        fc1 = layers.Dense(units=512, activation="relu")(v)
+        # Edited:
+        # logits = layers.Dense(units=10)(fc1)
+        logits = layers.Dense(units=num_classes)(fc1)
+        # Edited:
+        # return logits
+        model = tf.keras.Model(input_layer, logits)
+        return model
+
+    return keras_model_fn
 
 # FIXME 5: finish.
 #

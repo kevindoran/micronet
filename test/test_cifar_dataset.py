@@ -104,7 +104,7 @@ def test_test_dataset():
     _check_dataset(ds, crop)
 
 
-# FIXME 20: we should make this run both for the standard and TPU estimator.
+# FIXME 20: we should make this runs both for the standard and TPU estimator.
 @pytest.mark.tpu_only
 def test_with_estimator(estimator_fn):
     """Tests that the cifar dataset pipeline can generate data for a TPU.

@@ -135,7 +135,8 @@ def create_train_op(loss, processor_type):
     # RMSProp doesn't seem to be working for me on CPU or TPU.
     #optimizer = tf.train.RMSPropOptimizer(learning_rate_base, decay=0.90, momentum=0.9)
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-    optimizer = tf.train.AdamOptimizer()
+    #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate_base)
     if processor_type == ProcessorType.TPU:
         optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
     # TODO: is this the correct value for the step argument?
