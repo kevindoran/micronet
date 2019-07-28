@@ -1,1 +1,1 @@
-gcloud compute ssh kdoran1 --ssh-flag="-N -f -L localhost:12345:localhost:6006"
+gcloud compute ssh kdoran-hcpu --ssh-flag="-N -f -L localhost:12345:localhost:6006"
