@@ -1,7 +1,7 @@
 import pytest
 import micronet.models.mobilenetv2 as mobilenetv2
 import micronet.models.xiaochus_mobilenetv2 as xiaochus_mobilenetv2
-import micronet.cifar.dataset as cifar_ds
+import micronet.dataset.cifar as cifar_ds
 import micronet.estimator
 import tensorflow as tf
 import test.util
@@ -63,9 +63,11 @@ def test_is_trainable(estimator_fn, cifar_dataset_fn, is_cloud):
         train_steps = 10
     eval_steps = int(eval_count / batch_size)
     assert eval_steps * batch_size == eval_count
-    # Errors due to ops being created in loops:
-    estimator = estimator_fn(xiaochus_model_fn, batch_size, batch_size)
-    #estimator = estimator_fn(keras_model_fn, batch_size, batch_size)
+    # Set learning decay to epoch boundary.
+    examples_per_learning_decay = micronet.cifar.dataset.TRAIN_COUNT
+    #estimator = estimator_fn(xiaochus_model_fn, batch_size, batch_size)
+    estimator = estimator_fn(keras_model_fn, batch_size, batch_size,
+                             examples_per_learning_decay)
 
     # TODO: Move to cifar.dataset
     def input_fn(params):

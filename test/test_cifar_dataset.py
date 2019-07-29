@@ -1,5 +1,5 @@
 import pytest
-import micronet.cifar.dataset as cifar_ds
+import micronet.dataset.cifar as cifar_ds
 import tensorflow as tf
 import numpy as np
 import test.util

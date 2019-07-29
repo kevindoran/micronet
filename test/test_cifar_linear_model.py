@@ -1,6 +1,6 @@
 import pytest
 import micronet.cifar.linear_model as cifar_linear_model
-import micronet.cifar.dataset as cifar_ds
+import micronet.dataset.cifar as cifar_ds
 import micronet.estimator
 import test.util
 
