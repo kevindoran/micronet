@@ -1,10 +1,11 @@
 settings {
     nodaemon = true, -- Run in foreground.
 }
--- "tensorflow_models" is currently ignored, however, it needs to be synced _once_.
--- I'm not sure how to enable a one-time copy. The syncing needs to be disabled 
--- after the first sync, as my OS doesn't have enough inode_watchers available for
--- running both the sync and other applications such as pycharm.
+-- "tensorflow_models" and "tensorflow_tpu" are currently ignored, however, they
+-- needs to be synced one each time the submodules are updated. This is
+-- infrequent so they are left ignored until sync is needed. This is done as my
+-- OS doesn't have enough inode_watchers available for running both the sync and
+-- other applications such as pycharm.
 sync {
     default.rsyncssh,
     source="/home/k/projects/micronet",
@@ -15,9 +16,10 @@ sync {
              ".git", 
              ".idea", 
              "*.pytest_cache*", 
-             "gcloud_env",
-             "tensorflow_models",
-             "tensorflow_tpu"},
+             "gcloud_env"
+             ,"tensorflow_models"
+             ,"tensorflow_tpu"
+            },
     delete='startup' -- Lsyncd will delete files on target when starting (if needed to keep target folder in sync with source).
 }
 
