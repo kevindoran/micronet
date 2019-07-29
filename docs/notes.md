@@ -61,3 +61,39 @@ Running networks on a TPU generate NaN errors more often than running them on a 
 a result of other errors being uncaught on the TPU. For example, an NaN error was encountered on a TPU. Running the
 same program with a CPU produced a clear error stating that an example label was out of the expected [0, 1000) range. 
 Fixing this issue and running on a TPU lead to no errors.  
+
+
+Optimization
+============
+This is an area with significant potential for improvement.
+
+Terminology
+-----------
+iteration: a period of training where a single batch of data has been processed.
+global step: the number of batches/iterations processed so far.
+epoch: a period of training where the graph has seen every sample once.
+(what if the dataset doesn't repeat, as it uses endless random augmentation?)
+
+Common approaches
+-----------------
+A common approach is to choose a popular optimizer, such as a SGD or Adam
+optimizer. Set the learning rate to decay exponentially (decay occurring at
+epoch boundaries, which I think seems like an arbitrary place to execute the 
+decay). Then experiment with different initial rates and decay factors.
+
+Better approach
+---------------
+A better approach would be to monitor how the model accuracy develops and to
+update the learning rate accordingly. A simulated annealing approach could be 
+taken where the accuracy after X number of iterations/batches determines whether
+the model should continue or be reset to a previous state (with the addition of
+another hyper-parameter 'energy' which is used to determine what level of 
+accuracy _decrease_ still permits continuing without restoring from checkpoint).
+
+Surely there are some online algorithms in Tensorflow already?
+
+LRFinder
+--------
+For choosing the initial rate: 
+https://medium.com/octavian-ai/how-to-use-the-learning-rate-finder-in-tensorflow-126210de9489
+

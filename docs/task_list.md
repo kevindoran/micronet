@@ -78,5 +78,12 @@ local drive.
 24. Switch to AdafactorOptimizer as noted in tpu troubleshooting docs.
     https://cloud.google.com/tpu/docs/troubleshooting
     
+[Closed] 
 25. Enable live logging in pytest so as to investigate performance such as
-issues.
+issues. 
+Solution: just use `-s` option for no capture.
+
+26. Write a plugin to save logs to google cloud storage. This repo might be a
+good reference: https://github.com/j19sch/pytest-logfest/blob/master/pytest_logfest/plugin.py
+This feature is needed to preserve logs in-between preemptive vm's getting reset.
+Permanent log storage organised by timestamp etc would be nice too.

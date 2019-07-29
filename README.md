@@ -18,5 +18,9 @@ Run tests and signal that there is a TPU available:
 This should be run only on a Google cloud VM with a TPU available in the READY
 state. 
 
+Run tests and allow test output to be outputted live to std-out:
+
+    pytest -s ./test
+
 
 
