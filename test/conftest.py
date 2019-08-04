@@ -24,6 +24,15 @@ def is_cloud(request):
     return is_cloud
 
 
+# This will replace is_cloud
+@pytest.fixture
+def machine_settings(request):
+    MachineSettings = namedtuple('MachineSettings', 'is_cloud num_vcpu')
+    is_cloud = request.config.getoption('--cloud', default=False)
+    num_vcpu = os.cpu_count()
+    return MachineSettings(is_cloud, num_vcpu)
+
+
 @pytest.fixture
 def gcloud_settings(request):
     return micronet.gcloud.load_settings()
