@@ -1,0 +1,25 @@
+# Delete existing
+# https://cloud.google.com/sdk/gcloud/reference/compute/tpus/delete
+gcloud compute tpus delete kdoran1 --zone=us-central1-f
+
+# Create 
+# https://cloud.google.com/sdk/gcloud/reference/compute/tpus/create 
+# The 'range' setting The range is the network address and subnet mask. For v2-8
+# machines, 8 ip addresses are needed, so the network must have 3 bits
+# (log_2(8)), so the network mask is 32-3=29 Standard VM projects will already
+# have a 10.128.0.0/20 network created for us-central1. The TPU network cannot
+# overlap this. This is mentioned in the tpu docs:
+# https://cloud.google.com/tpu/docs/internal-ip-blocks 
+# The host-max for the existing network is 10.128.15.254 (with 10.128.15.255
+# being the broadcast addr). Thus, the next lowest network address available is
+# 10.128.16.0.
+# http://jodies.de/ipcalc?host=10.128.0.0&mask1=20&mask2=
+gcloud compute tpus create kdoran1 \
+    --project=micronet-kdoran \
+    --zone=us-central1-f \
+    --network=default \
+    --range="10.128.16.0/29" \
+    --version="1.13" \
+    --preemptible \
+    --accelerator-type="v2-8" \
+    --description="TPU created automatically by micronet project script." 
