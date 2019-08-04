@@ -158,10 +158,7 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     """
 
     # Setup.
-    # Create the estimator compatible model_fn from the Keras model_fn.
-    # This method is tested elsewhere.
-    model_fn = micronet.estimator.create_model_fn(
-    _keras_model_fn, processor_type = micronet.estimator.ProcessorType.TPU)
+    model_fn = test.util.test_model_fn(NUM_CIFAR10_CLASSES)
     batch_size = 128
 
     # Test

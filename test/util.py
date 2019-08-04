@@ -85,10 +85,10 @@ def test_keras_fn(num_classes):
         # Pass our input tensor to initialize the Keras input layer.
         # Edited:
         # v = layers.Input(tensor=input_features)
-        #input_layer = layers.Input(shape=(32, 32, 3))
+        input_layer = layers.Input(shape=(32, 32, 3))
         first_layer = layers.Conv2D(filters=32, kernel_size=5,
-                          activation="relu", padding="same",
-                          input_shape=(32, 32, 3))#(input_layer)
+                          activation="relu", padding="same")(input_layer)
+                          # input_shape=(32, 32, 3))#(input_layer)
         v = layers.MaxPool2D(pool_size=2, name='maxPool1')(first_layer)
         v = layers.Conv2D(filters=64, kernel_size=5,
                           activation="relu", padding="same")(v)
@@ -100,17 +100,63 @@ def test_keras_fn(num_classes):
         logits = layers.Dense(units=num_classes)(fc1)
         # Edited:
         # return logits
-        model = tf.keras.Model(first_layer, logits)
+        model = tf.keras.Model(input_layer, logits)
         return model
 
     return keras_model_fn
 
-# FIXME 5: finish.
-#
-# def _count_bytes(tensor):
-#     params = _count_params(tensor)
-#     size = params *
-#
-# def count_trainable_param_bytes(keras_model):
-#    trainable_weights = get_trainable_weights(keras_model)
+
+def test_model_fn(num_classes):
+
+    def model_fn(features, labels, mode, params):
+        del params
+        image = features
+
+        def metric_fn(labels, logits):
+            accuracy = tf.metrics.accuracy(
+                labels=labels, predictions=tf.argmax(logits, axis=1))
+            return {"top_1_accuracy": accuracy}
+
+        model = test_keras_fn(10)()
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            outputs = model(image, training=False)
+            predictions = {
+                'class_ids': tf.argmax(outputs, axis=1),
+                'probabilities': tf.nn.softmax(outputs)
+            }
+            return tf.contrib.tpu.TPUEstimatorSpec(mode, predictions=predictions)
+        elif mode == tf.estimator.ModeKeys.EVAL:
+            outputs = model(image, training=False)
+            loss = tf.losses.sparse_softmax_cross_entropy(logits=outputs,
+                                                          labels=labels)
+            return tf.contrib.tpu.TPUEstimatorSpec(mode=mode, loss=loss,
+                eval_metrics=(metric_fn, [labels, outputs]))
+        elif mode == tf.estimator.ModeKeys.TRAIN:
+            outputs = model(image, training=True)
+            loss = tf.losses.sparse_softmax_cross_entropy(logits=outputs,
+                                                          labels=labels)
+            learning_rate = tf.train.exponential_decay(
+                0.05,
+                tf.train.get_global_step(),
+                decay_steps=100000,
+                decay_rate=0.96)
+            optimizer = tf.train.GradientDescentOptimizer(
+                learning_rate=learning_rate)
+            optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
+            train_op = optimizer.minimize(loss, tf.train.get_global_step())
+            estimator_spec = tf.contrib.tpu.TPUEstimatorSpec(mode, loss=loss,
+                                                        train_op=train_op)
+            return estimator_spec
+
+    return model_fn
+
+
+    # FIXME 5: finish.
+    #
+    # def _count_bytes(tensor):
+    #     params = _count_params(tensor)
+    #     size = params *
+    #
+    # def count_trainable_param_bytes(keras_model):
+    #    trainable_weights = get_trainable_weights(keras_model)
 #    count = int(np.sum([_count_params(p) for p in set(trainable_weights)]))
