@@ -3,6 +3,8 @@ import micronet.estimator
 import pytest
 import pytz
 import datetime
+from collections import namedtuple
+import os
 
 
 def pytest_addoption(parser):
@@ -91,15 +93,28 @@ def estimator_fn(is_cloud, tmpdir, gcloud_temp_path):
             A tf.Estimator or tf.TPUEstimator.
         """
         if use_tpu:
-            model_fn = micronet.estimator.create_model_fn(keras_model_fn,
-                    processor_type=micronet.estimator.ProcessorType.TPU)
+            model_fn = micronet.estimator.create_model_fn(
+                keras_model_fn, micronet.estimator.ProcessorType.TPU)
             gcloud_settings = micronet.gcloud.load_settings()
-            estimator = micronet.estimator.create_tpu_estimator(
-                gcloud_settings, model_dir, model_fn, train_batch_size,
-                eval_batch_size)
+            retries = 3
+            delay_secs = 10
+            estimator = None
+            for i in range(retries):
+                try:
+                    estimator = micronet.estimator.create_tpu_estimator(
+                        gcloud_settings, model_dir, model_fn, train_batch_size,
+                        eval_batch_size)
+                    break
+                except RuntimeError:
+                    if i == retries - 1:
+                        raise
+                    import time
+                    time.sleep(delay_secs)
+                    continue
+            assert estimator
         else:
-            model_fn = micronet.estimator.create_model_fn(keras_model_fn,
-                    processor_type=micronet.estimator.ProcessorType.CPU)
+            model_fn = micronet.estimator.create_model_fn(
+                keras_model_fn, micronet.estimator.ProcessorType.CPU)
             estimator = micronet.estimator.create_cpu_estimator(model_dir,
                                                                 model_fn)
         return estimator
