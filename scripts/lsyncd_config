@@ -16,6 +16,10 @@ sync {
              ".git", 
              ".idea", 
              "*.pytest_cache*", 
+             "*.___jb_old___",
+             "*.___jb_tmp___",
+             ".*.swp",
+             ".*~",
              "gcloud_env"
              ,"tensorflow_models"
              ,"tensorflow_tpu"
