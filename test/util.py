@@ -60,7 +60,7 @@ def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
     random_chance = 1/num_classes
     pre_train_bound_factor = 0.5
     assert random_chance*pre_train_bound_factor \
-           < results['accuracy'] < \
+           < results['top_1_accuracy'] < \
            random_chance/pre_train_bound_factor
 
     # 2. Check that the model can be trained.
@@ -69,12 +69,13 @@ def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
     # 3. Check that the model accuracy has increased.
     results = estimator.evaluate(eval_input_fn, steps=eval_steps)
     post_train_bound_factor = 0.8
+    print(results['top_1_accuracy']) # TODO: temp
     assert expected_post_train_accuracy*post_train_bound_factor \
-           < results['accuracy'] < \
+           < results['top_1_accuracy'] < \
            expected_post_train_accuracy/post_train_bound_factor
 
 
-def test_keras_fn(input_shape, num_classes):
+def test_keras_fn(num_classes):
 
     # This input function is an edited version of a the model function from:
     # https://github.com/tensorflow/tpu/blob/master/models/experimental/cifar_keras/cifar_keras.py
@@ -84,10 +85,11 @@ def test_keras_fn(input_shape, num_classes):
         # Pass our input tensor to initialize the Keras input layer.
         # Edited:
         # v = layers.Input(tensor=input_features)
-        input_layer = layers.Input(shape=input_shape)
-        v = layers.Conv2D(filters=32, kernel_size=5,
-                          activation="relu", padding="same")(input_layer)
-        v = layers.MaxPool2D(pool_size=2, name='maxPool1')(v)
+        #input_layer = layers.Input(shape=(32, 32, 3))
+        first_layer = layers.Conv2D(filters=32, kernel_size=5,
+                          activation="relu", padding="same",
+                          input_shape=(32, 32, 3))#(input_layer)
+        v = layers.MaxPool2D(pool_size=2, name='maxPool1')(first_layer)
         v = layers.Conv2D(filters=64, kernel_size=5,
                           activation="relu", padding="same")(v)
         v = layers.MaxPool2D(pool_size=2, name='maxPool2')(v)
@@ -98,7 +100,7 @@ def test_keras_fn(input_shape, num_classes):
         logits = layers.Dense(units=num_classes)(fc1)
         # Edited:
         # return logits
-        model = tf.keras.Model(input_layer, logits)
+        model = tf.keras.Model(first_layer, logits)
         return model
 
     return keras_model_fn

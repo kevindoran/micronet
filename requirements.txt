@@ -6,6 +6,7 @@ cachetools==3.1.1
 certifi==2019.6.16
 chardet==3.0.4
 dill==0.3.0
+-e git+https://github.com/tensorflow/tpu.git@4d7f7bf76df200a6dd74b01a6dbb95d8b013ecfe#egg=efficientnet&subdirectory=../../tensorflow_tpu/models
 future==0.17.1
 gast==0.2.2
 google-api-core==1.14.0

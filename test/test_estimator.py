@@ -21,15 +21,15 @@ NUM_CIFAR10_CLASSES = 10
 # This input function is copied from the tensorflow/tpu repository, and thus,
 # is assumed to be working. Although, there is two edits as mentioned in the
 # comments below.
-def _keras_model_fn():
+def _keras_model_fn(input_features):
     """Define a CIFAR model in Keras."""
     layers = tf.keras.layers
     # Pass our input tensor to initialize the Keras input layer.
-    # Edited:
-    # v = layers.Input(tensor=input_features)
-    input_layer = layers.Input(shape=(32, 32, 3))
+    v = layers.Input(tensor=input_features)
+    # Can't use a placeholder on TPUs.
+    # input_layer = layers.Input(shape=(32, 32, 3))
     v = layers.Conv2D(filters=32, kernel_size=5,
-                      activation="relu", padding="same")(input_layer)
+                                activation="relu", padding="same")(v)
     v = layers.MaxPool2D(pool_size=2, name='maxPool1')(v)
     v = layers.Conv2D(filters=64, kernel_size=5,
                       activation="relu", padding="same")(v)
@@ -39,8 +39,9 @@ def _keras_model_fn():
     logits = layers.Dense(units=10)(fc1)
     # Changed:
     #return logits
-    model = tf.keras.Model(input_layer, logits)
-    return model
+    #model = tf.keras.Model(v, logits)
+    #return model
+    return logits
 
 
 # This input function is copied from the tensorflow/tpu repository, and thus,
@@ -87,6 +88,8 @@ def test_get_cluster_resolver(gcloud_settings):
     # 1. Insure no exceptions are raised an a resolver is returned.
     resolver = micronet.estimator.get_cluster_resolver(gcloud_settings)
     assert resolver
+    # The following should raise if the TPU is not healthy.
+    resolver.cluster_spec()
 
 
 @pytest.mark.tpu_only
@@ -94,7 +97,8 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
     """Tests that create_model_fn() creates an estimator compatible model_fn.
 
     Tests that:
-        1. create_model_fn() runs without error.
+        1. create_model_fn() runs without error with the above Cifar Keras
+           model.
         2. An estimator can be constructed with the created model_fn.
         3. The estimator is able to evaluate samples.
         4. The estimator can be trained.
@@ -126,10 +130,11 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
         config=run_config,
         train_batch_size=128,
         eval_batch_size=128,
+        # Include params to avoid warning message: model_fn has params arg but
+        # estimator is not passed params.
+        params={},
         # We don't need to save the model.
         export_to_tpu=False)
-        # export_to_cpu doesn't seem to be released as of tf 1.13.1.
-        # export_to_cpu=False)
     assert estimator
 
     # 3, 4, 5. Test pre-train eval, training and post-train eval.
@@ -156,7 +161,7 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     # Create the estimator compatible model_fn from the Keras model_fn.
     # This method is tested elsewhere.
     model_fn = micronet.estimator.create_model_fn(
-        _keras_model_fn, processor_type=micronet.estimator.ProcessorType.TPU)
+    _keras_model_fn, processor_type = micronet.estimator.ProcessorType.TPU)
     batch_size = 128
 
     # Test

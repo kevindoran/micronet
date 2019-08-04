@@ -62,6 +62,15 @@ a result of other errors being uncaught on the TPU. For example, an NaN error wa
 same program with a CPU produced a clear error stating that an example label was out of the expected [0, 1000) range. 
 Fixing this issue and running on a TPU lead to no errors.  
 
+3. Progress stops, but no errors
+--------------------------------
+This was happening to me previously when trying to train my custom MobileNetv2 
+Keras implementation. I think what was happening was that, I had disabled 
+checkpoints (max_checkpoints=0 in TPUEstimator (or RunConfig?) constructor),
+but TPUs might have required checkpoints to continue. This is just an guess
+without much info. This blog:
+https://medium.com/tensorflow/how-to-write-a-custom-estimator-model-for-the-cloud-tpu-7d8bd9068c26
+mentions very briefly the requirement of TPUs on checkpoints.
 
 Optimization
 ============
@@ -97,3 +106,11 @@ LRFinder
 For choosing the initial rate: 
 https://medium.com/octavian-ai/how-to-use-the-learning-rate-finder-in-tensorflow-126210de9489
 
+TPU & Estimator
+===============
+Some interesting reasoning about how batch_size works with TPUEstimator. Sheds
+some light on why it is passed through TPUEstimator constructor. 
+https://stackoverflow.com/questions/50596369/train-and-evaluate-batch-size-with-tpu-on-gcmle/50629758o
+
+It looks like EfficientNet follows some of the code outlined in this tutorial:
+https://medium.com/tensorflow/how-to-write-a-custom-estimator-model-for-the-cloud-tpu-7d8bd9068c26

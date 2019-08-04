@@ -1,6 +1,6 @@
 import pytest
 import tensorflow as tf
-import micronet.dataset.imagenet as imagenet_ds
+import micronet.dataset.imagenet_old as imagenet_ds
 import test.util
 
 

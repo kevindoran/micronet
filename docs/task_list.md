@@ -87,3 +87,9 @@ Solution: just use `-s` option for no capture.
 good reference: https://github.com/j19sch/pytest-logfest/blob/master/pytest_logfest/plugin.py
 This feature is needed to preserve logs in-between preemptive vm's getting reset.
 Permanent log storage organised by timestamp etc would be nice too.
+
+27. Currently using EfficentNet's ImageNet input pipeline. However, I'd like to
+change that pipeline to have 3 splits (test, validation & train). The work here
+is to copy the code from EfficientNet, update the header according to the 
+license requirements and to add a new split, like how dataset/imagenet_old.py
+does it.
