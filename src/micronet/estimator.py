@@ -26,8 +26,9 @@ const_learning_rate = 0.045
 learning_rate_base = 0.5
 
 DEFAULT_SKIP_HOST = False
+# FIXME 28. Choose appropriate values.
 DEFAULT_DECAY_RATE = 0.9
-DEFAULT_WEIGHT_DECAY = 0.1 # TODO
+DEFAULT_WEIGHT_DECAY = 1e-5
 
 TOP_1_ACCURACY_KEY = 'top_1_accuracy'
 TOP_5_ACCURACY_KEY = 'top_5_accuracy'
@@ -307,6 +308,7 @@ def _model_fn(features, labels, mode, params, config,
     logit_outputs = keras_model_fn(image)#(training=is_training)
     assert logit_outputs.get_shape()[0] == batch_size
     num_classes = logit_outputs.get_shape()[1]
+
     loss_op = create_loss_op(logit_outputs, labels, num_classes,
                              hparams.weight_decay)
     host_call = None
@@ -359,8 +361,8 @@ def metric_fn(labels, logits):
     top_1_accuracy = tf.metrics.accuracy(labels, predictions)
     in_top_5 = tf.cast(tf.nn.in_top_k(logits, labels, k=5), tf.float32)
     top_5_accuracy = tf.metrics.mean(in_top_5)
-    return {"top_1_accuracy": top_1_accuracy,
-            "top_5_accuracy": top_5_accuracy}
+    return {TOP_1_ACCURACY_KEY: top_1_accuracy,
+            TOP_5_ACCURACY_KEY: top_5_accuracy}
 
 
 def _predict(logit_outputs):
@@ -456,7 +458,7 @@ def create_train_op(loss,
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
     # FIXME: Learning rate not working
     #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-    optimizer = tf.train.AdamOptimizer(learning_rate=const_learning_rate)
+    optimizer = tf.train.AdamOptimizer()
     if processor_type == ProcessorType.TPU:
         optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
     # TODO: is this the correct value for the step argument?
@@ -520,17 +522,6 @@ def _host_call_and_args(global_step, learning_rate, current_epoch,
                           [global_step_t, learning_rate_t, current_epoch_t])
     return host_call_and_args
 
-# TODO: is 'op' correct here?
-def create_loss_op_old(logits, labels):
-    """Why do all the examples use one-hot encoding?"""
-    loss = tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=labels)
-    # Previously, the weight regularization was manged by the Keras model. It
-    # seems tidier to handle in centrally in the create_loss_op instead. See
-    # the below reimplementation.
-    l2_loss = tf.losses.get_regularization_loss()
-    loss += l2_loss
-    return loss
-
 
 def create_loss_op(logits, labels, num_classes, weight_decay):
     one_hot_labels = tf.one_hot(labels, num_classes)
@@ -542,7 +533,11 @@ def create_loss_op(logits, labels, num_classes, weight_decay):
     weight_sum = tf.add_n(
         [tf.nn.l2_loss(v) for v in tf.trainable_variables()
         if 'batch_normalization' not in v.name])
-    loss = cross_entropy * weight_decay * weight_sum
+    # Interesting note: The following line was the source of a bug which was
+    # time consuming to track down. The '+' was accidentally a '*'. The result
+    # being estimation accuracy reduced to random at 10% for cifar10.
+    # TODO: testing without weight decay.
+    loss = cross_entropy + weight_decay * weight_sum
     return loss
 
 
@@ -602,7 +597,7 @@ def train_and_eval(estimator, train_input_fn, eval_input_fn, train_steps,
                         next_checkpoint, eval_results)
         ckpt = tf.train.latest_checkpoint(model_dir)
         efficientnet.utils.archive_ckpt(eval_results,
-                           eval_results['top_1_accuracy'], ckpt)
+                           eval_results[TOP_1_ACCURACY_KEY], ckpt)
 
     elapsed_time = int(time.time() - start_timestamp)
     tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',

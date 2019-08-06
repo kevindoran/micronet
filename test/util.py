@@ -60,7 +60,7 @@ def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
     random_chance = 1/num_classes
     pre_train_bound_factor = 0.5
     assert random_chance*pre_train_bound_factor \
-           < results['top_1_accuracy'] < \
+           < results[micronet.estimator.TOP_1_ACCURACY_KEY] < \
            random_chance/pre_train_bound_factor
 
     # 2. Check that the model can be trained.
@@ -69,9 +69,8 @@ def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
     # 3. Check that the model accuracy has increased.
     results = estimator.evaluate(eval_input_fn, steps=eval_steps)
     post_train_bound_factor = 0.8
-    print(results['top_1_accuracy']) # TODO: temp
     assert expected_post_train_accuracy*post_train_bound_factor \
-           < results['top_1_accuracy'] < \
+           < results[micronet.estimator.TOP_1_ACCURACY_KEY] < \
            expected_post_train_accuracy/post_train_bound_factor
 
 

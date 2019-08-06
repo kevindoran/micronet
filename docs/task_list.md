@@ -93,3 +93,5 @@ change that pipeline to have 3 splits (test, validation & train). The work here
 is to copy the code from EfficientNet, update the header according to the 
 license requirements and to add a new split, like how dataset/imagenet_old.py
 does it.
+
+28. Determine good values for decay_rate and weight_decay.
