@@ -105,7 +105,7 @@ def main():
 
     # Run
     print_model_dirs(
-        find_model_dirs(go_back(args.days, args.hours),
+        find_model_dirs(go_back(args.days, args.hours, args.minutes),
                         str_filter=args.filter))
 
 
