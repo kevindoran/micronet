@@ -13,7 +13,7 @@ def test_num_trainable_params():
     assert cifar_linear_model.NUM_TRAINABLE_PARAM == 172900
 
 
-def test_is_trainable(estimator_fn):
+def test_is_trainable(estimator_fn, machine_settings):
     """Test that that training and evaluation run as expected.
 
     Tests that:
@@ -23,9 +23,9 @@ def test_is_trainable(estimator_fn):
         3. The trained model has higher accuracy (~20%).
     """
     # Setup
-    batch_size = 8 # Must be divisible by number of replicas (8 for TPU v2)
+    batch_size = 128 # Must be divisible by number of replicas (8 for TPU v2)
     crop_size = 24
-    eval_count = 1000
+    eval_count = 1024
     eval_steps = int(eval_count / batch_size)
     assert eval_steps * batch_size == eval_count
     estimator = estimator_fn(
@@ -37,7 +37,8 @@ def test_is_trainable(estimator_fn):
         if 'batch_size' in params:
             assert params['batch_size'] == batch_size
         del params
-        mini_ds = cifar_ds.train_dataset()
+        mini_ds = cifar_ds.train_dataset(
+            cloud_storage=machine_settings.is_cloud)
         mini_ds = mini_ds.map(
             cifar_ds.preprocess_fn(augment=False, crop_to=crop_size))
         # Take a small amount and repeat so that the test can show training
@@ -56,7 +57,8 @@ def test_is_trainable(estimator_fn):
     #      https://www.di-mgt.com.au/binomial-calculator.html)
     # TODO: is it valid to assume a random output from the untrained model?
     results = estimator.evaluate(input_fn, steps=eval_steps)
-    assert 3/eval_count < results['accuracy'] <= 19/eval_count
+    assert 3/eval_count < results[micronet.estimator.TOP_1_ACCURACY_KEY] \
+           <= 19/eval_count
 
     # 2. Check that the model can be trained.
     # Using the eval_steps as the max training steps. Could use something else.
@@ -70,4 +72,4 @@ def test_is_trainable(estimator_fn):
     # We should expect some improvement over the random case, 1/100. Running
     # it a few times gave ~4.5%, so using a value a little lower to make sure
     # the test reliably passes (while still being useful).
-    assert results['accuracy'] >= 0.040
+    assert results[micronet.estimator.TOP_1_ACCURACY_KEY] >= 0.040

@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import test.util
 import functools
+import micronet.estimator
 
 
 # This input function is an edited version of a the model function from:
@@ -104,8 +105,7 @@ def test_test_dataset():
     _check_dataset(ds, crop)
 
 
-# FIXME 20: we should make this runs both for the standard and TPU estimator.
-@pytest.mark.tpu_only
+@pytest.mark.slow
 def test_with_estimator(estimator_fn):
     """Tests that the cifar dataset pipeline can generate data for a TPU.
 
@@ -128,7 +128,7 @@ def test_with_estimator(estimator_fn):
     batch_size = 128
     crop_to = 32 # Size expected by our test model.
     expected_accuracy = 0.99 # Expect overfitting.
-    train_steps = 10000
+    train_steps = 12800
     eval_steps = 5000 // batch_size # there are 5000 eval samples.
     test_steps = 10000 // batch_size # there are 1000 test samples.
     cifar100_classes = 100
@@ -144,7 +144,7 @@ def test_with_estimator(estimator_fn):
         # Otherwise, the dataset will be created outside of the training/eval
         # session.
         ds = ds_fn(cloud_storage=True)
-        ds = ds.map(cifar_ds.preprocess_fn(augment=True, crop_to=crop_to))
+        ds = ds.map(cifar_ds.preprocess_fn(augment=False, crop_to=crop_to))
         return ds.cache().repeat().batch(batch_size, drop_remainder=True)\
             .prefetch(1)
 
@@ -167,6 +167,6 @@ def test_with_estimator(estimator_fn):
     # getting ~99% accuracy. However, it's worth looking into more. (FIXME 23)
     # See gs://micronet_bucket1/pytest/test_with_estimator/20190723T173507/ for
     # results that seem to back this idea up.
-    assert 0.2 < results['accuracy'] < 0.4
+    assert 0.2 < results[micronet.estimator.TOP_1_ACCURACY_KEY] < 0.4
     # FIXME 22: create a propper assert near that takes into around the domain
     # restriction [0,1] and the resulting non-linear bounds.

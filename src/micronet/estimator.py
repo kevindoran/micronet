@@ -246,6 +246,18 @@ def create_model_fn(keras_model_fn, processor_type, hparams=None):
     This way of creating the model_fn means we don't need to use to pass
     parameters through the estimator and take them via the params parameter.
     That mechanism seems flaky and seems to have poor encapsulation.
+
+    Args:
+        keras_model_fn: a function returning a Keras Model. Signature:
+            <function_name>(): keras.models.Model
+
+         It seems that placeholder nodes aren't completely incompatible with TPUs,
+         but it's not clear where they can be placed:
+         https://git.codingcafe.org/Mirrors/tensorflow/tensorflow/commit/620c8383123519fcf4d987efb9776d861901ccfa
+
+         An alternative would be to pass the input layer as a parameter into the
+         keras_model_fn, however, this makes it harder to test model functions
+         as they are no-longer standalone.
     """
     if not hparams:
         hparams = HParams()
@@ -280,9 +292,19 @@ def _model_fn(features, labels, mode, params, config,
               keras_model_fn,
               processor_type,
               hparams):
-    # What to have in params and what to have as a function parameter?
-    batch_size = params['batch_size']
-    iterations_per_loop = config.tpu_config.iterations_per_loop
+    if processor_type == ProcessorType.TPU:
+        # Only a TPUEstimator populates the 'batch_size' parameter.
+        batch_size = params['batch_size']
+        # Only a TPUEstimator has a tpu_config.
+        iterations_per_loop = config.tpu_config.iterations_per_loop
+    else:
+        # Optionally, we could get the batch_size from the first dimension of
+        # the features, but I'm not sure if batch_size is always present.
+        batch_size = features.get_shape()[0]
+        # batch_size = None
+        # When not running on a TPU, this variable is not used. It is only
+        # to be used in the TPU's host call.
+        iterations_per_loop = None
     model_dir = config.model_dir
     # Note: EfficientNet does some transposing here. I wonder why it is done
     # in the model as opposed to the input function?
@@ -300,13 +322,11 @@ def _model_fn(features, labels, mode, params, config,
     # if params['use_bfloat16']:
     #     with tf.contrib.tpu.bfloat16_scope():
     #        logits = tf.cast(build_model(), tf.float32)
-    # Should image be passed on not?
-    # Option 1:
-    # logit_outputs = keras_model_fn()(image, training=is_training)
-    # Option 2:
-    # For option 2 the keras_model_fn doesn't need to know the input shape.
-    logit_outputs = keras_model_fn(image)#(training=is_training)
-    assert logit_outputs.get_shape()[0] == batch_size
+    logit_outputs = keras_model_fn()(image, training=is_training)
+    assert features.get_shape()[0] == batch_size
+    if processor_type == ProcessorType.TPU:
+        # We know the batch size and can make this assertion:
+        assert logit_outputs.get_shape()[0] == batch_size
     num_classes = logit_outputs.get_shape()[1]
 
     loss_op = create_loss_op(logit_outputs, labels, num_classes,
@@ -412,7 +432,9 @@ def _train(loss_op,
 
     # Taken from resnet_main.py in tensorflow_tpu repo.
     host_call = None
-    if not hparams.skip_host_call:
+    # Add the host call if using TPUs and the option is enabled. CPU/GPU runs
+    # don't need to use a host call.
+    if processor_type == ProcessorType.TPU and not hparams.skip_host_call:
          host_call = _host_call_and_args(
              global_step, learning_rate, current_epoch, iterations_per_loop,
              model_dir)

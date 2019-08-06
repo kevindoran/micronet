@@ -117,7 +117,7 @@ def example_model_fn(num_classes):
                 labels=labels, predictions=tf.argmax(logits, axis=1))
             return {"top_1_accuracy": accuracy}
 
-        model = example_keras_fn(10)()
+        model = example_keras_fn(num_classes)()
         if mode == tf.estimator.ModeKeys.PREDICT:
             outputs = model(image, training=False)
             predictions = {

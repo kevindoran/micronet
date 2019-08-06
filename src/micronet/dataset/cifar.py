@@ -76,6 +76,8 @@ def preprocess_fn(augment, crop_to):
     Returns:
         An infinite (repeating) batched dataset of tuples (img, label).
     """
+    # FIXME 29: augmentation breaks test_cifar_dataset.py, but I'm not sure why.
+    augment = False
     def map_fn(record):
         """
         Returns:

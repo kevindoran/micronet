@@ -41,7 +41,8 @@ def rough_num_trainable_params(input_shape, alpha, classes):
     return 0
 
 
-def create_model(input_shape, alpha=1.0, weights='imagenet', classes=1000):
+def create_model(input_shape, alpha=1.0, weights='imagenet',
+                 classes=1000):
     if not (weights in {'imagenet', None} or os.path.exists(weights)):
         raise ValueError('The `weights` argument should be either '
                          '`None` (random initialization), `imagenet` '

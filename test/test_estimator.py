@@ -21,15 +21,14 @@ NUM_CIFAR10_CLASSES = 10
 # This input function is copied from the tensorflow/tpu repository, and thus,
 # is assumed to be working. Although, there is two edits as mentioned in the
 # comments below.
-def _keras_model_fn(input_features):
+def _keras_model_fn():
     """Define a CIFAR model in Keras."""
     layers = tf.keras.layers
     # Pass our input tensor to initialize the Keras input layer.
-    v = layers.Input(tensor=input_features)
     # Can't use a placeholder on TPUs.
-    # input_layer = layers.Input(shape=(32, 32, 3))
+    input_layer = layers.Input(shape=(32, 32, 3))
     v = layers.Conv2D(filters=32, kernel_size=5,
-                                activation="relu", padding="same")(v)
+                                activation="relu", padding="same")(input_layer)
     v = layers.MaxPool2D(pool_size=2, name='maxPool1')(v)
     v = layers.Conv2D(filters=64, kernel_size=5,
                       activation="relu", padding="same")(v)
@@ -37,17 +36,18 @@ def _keras_model_fn(input_features):
     v = layers.Flatten()(v)
     fc1 = layers.Dense(units=512, activation="relu")(v)
     logits = layers.Dense(units=10)(fc1)
-    # Changed:
-    #return logits
-    #model = tf.keras.Model(v, logits)
-    #return model
-    return logits
+    model = tf.keras.Model(input_layer, logits)
+    return model
 
 
 # This input function is copied from the tensorflow/tpu repository, and thus,
 # is assumed to be working.
 def input_fn(input_file, params):
     """Read CIFAR input data from a TFRecord dataset."""
+    # Only TPU estimator will populate params['batch_size'], so it needs a
+    # default.
+    default_batch_size = 32
+    batch_size = params.get('batch_size', default_batch_size)
     def parser(serialized_example):
         """Parses a single tf.Example into image and label tensors."""
         features = tf.parse_single_example(
@@ -68,9 +68,9 @@ def input_fn(input_file, params):
         return image, label
 
     dataset = tf.data.TFRecordDataset([input_file])
-    dataset = dataset.map(parser, num_parallel_calls=params['batch_size'])
-    dataset = dataset.prefetch(4 * params['batch_size']).cache().repeat()
-    dataset = dataset.batch(params['batch_size'], drop_remainder=True)
+    dataset = dataset.map(parser, num_parallel_calls=batch_size)
+    dataset = dataset.prefetch(4 * batch_size).cache().repeat()
+    dataset = dataset.batch(batch_size, drop_remainder=True)
     dataset = dataset.prefetch(1)
     return dataset
 
@@ -93,6 +93,7 @@ def test_get_cluster_resolver(gcloud_settings):
 
 
 @pytest.mark.tpu_only
+@pytest.mark.slow
 def test_create_model_fn(gcloud_settings, gcloud_temp_path):
     """Tests that create_model_fn() creates an estimator compatible model_fn.
 
@@ -145,6 +146,7 @@ def test_create_model_fn(gcloud_settings, gcloud_temp_path):
 
 
 @pytest.mark.tpu_only
+@pytest.mark.slow
 def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     """Tests that create_tpu_estimator() creates a usable TPUEstimator.
 
@@ -158,8 +160,8 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     """
 
     # Setup.
-    model_fn = test.util.example_model_fn(NUM_CIFAR10_CLASSES)
     batch_size = 128
+    model_fn = test.util.example_model_fn(NUM_CIFAR10_CLASSES)
 
     # Test
     # 1. Create an estimator without error.
@@ -175,9 +177,7 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
         expected_post_train_accuracy=EXPECTED_ACCURACY)
 
 
-# FIXME 20: we also need a test for the non-TPU Estimator case. We need some
-#           sort of test parameterization.
-@pytest.mark.tpu_only
+@pytest.mark.slow
 def test_estimator_fixture(estimator_fn):
     """Tests that the estimator_fn fixture creates a working estimator factory.
 

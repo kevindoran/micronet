@@ -12,12 +12,16 @@ def pytest_addoption(parser):
                      help='Signals that the tests are being run in the cloud '
                           'which should be able to run tests on both a CPU and '
                           'TPU.')
+    parser.addoption('--slow', action='store_true',
+                     help='Include slow running tests, which are normally '
+                          'ignored.')
 
 
-# TODO: add a cpu_only mark also.
 def pytest_runtest_setup(item):
     if 'tpu_only' in item.keywords and not item.config.getoption('cloud'):
         pytest.skip('This test only runs on cloud TPUs (use --cloud).')
+    if 'slow' in item.keywords and not item.config.getoption('slow'):
+        pytest.skip('This test is a slow running test (use --slow).')
 
 
 @pytest.fixture

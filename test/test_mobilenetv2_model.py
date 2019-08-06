@@ -43,6 +43,7 @@ def cifar_dataset_fn(request):
 
 
 # TODO: mostly copied from test_cifar_linear_model. Could be factored a bit.
+@pytest.mark.slow
 def test_is_trainable(estimator_fn, cifar_dataset_fn, is_cloud):
     """Test that that training and evaluation run as expected.
 
@@ -63,11 +64,7 @@ def test_is_trainable(estimator_fn, cifar_dataset_fn, is_cloud):
         train_steps = 10
     eval_steps = int(eval_count / batch_size)
     assert eval_steps * batch_size == eval_count
-    # Set learning decay to epoch boundary.
-    examples_per_learning_decay = micronet.cifar.dataset.TRAIN_COUNT
-    #estimator = estimator_fn(xiaochus_model_fn, batch_size, batch_size)
-    estimator = estimator_fn(keras_model_fn, batch_size, batch_size,
-                             examples_per_learning_decay)
+    estimator = estimator_fn(keras_model_fn, batch_size, batch_size)
 
     # TODO: Move to cifar.dataset
     def input_fn(params):

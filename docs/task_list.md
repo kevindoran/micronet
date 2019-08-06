@@ -95,3 +95,7 @@ license requirements and to add a new split, like how dataset/imagenet_old.py
 does it.
 
 28. Determine good values for decay_rate and weight_decay.
+
+29. Using custom augmentation for cifar100 leads to test_cifar_dataset.py's 
+estimator test to fail. It could be due to slower training or an issue with the 
+augmentation.
