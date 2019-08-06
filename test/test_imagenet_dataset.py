@@ -65,8 +65,8 @@ def test_with_estimator(estimator_fn):
     # Setup
     batch_size = 128
     steps = 20
-    keras_fn = test.util.test_keras_fn(imagenet_ds.DEFAULT_DATA_SHAPE,
-                                       imagenet_ds.NUM_CLASSES)
+    keras_fn = test.util.example_keras_fn(imagenet_ds.DEFAULT_DATA_SHAPE,
+                                          imagenet_ds.NUM_CLASSES)
     estimator = estimator_fn(keras_model_fn=keras_fn,
                              train_batch_size=batch_size,
                              eval_batch_size=batch_size)

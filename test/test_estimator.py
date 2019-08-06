@@ -158,7 +158,7 @@ def test_create_tpu_estimator(gcloud_settings, gcloud_temp_path):
     """
 
     # Setup.
-    model_fn = test.util.test_model_fn(NUM_CIFAR10_CLASSES)
+    model_fn = test.util.example_model_fn(NUM_CIFAR10_CLASSES)
     batch_size = 128
 
     # Test

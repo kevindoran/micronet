@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import micronet
 
 """
 Everything here is imported into the __init__.py. It's sufficient to import
@@ -74,7 +75,7 @@ def check_train_and_eval(estimator, train_input_fn, eval_input_fn,
            expected_post_train_accuracy/post_train_bound_factor
 
 
-def test_keras_fn(num_classes):
+def example_keras_fn(num_classes):
 
     # This input function is an edited version of a the model function from:
     # https://github.com/tensorflow/tpu/blob/master/models/experimental/cifar_keras/cifar_keras.py
@@ -105,7 +106,7 @@ def test_keras_fn(num_classes):
     return keras_model_fn
 
 
-def test_model_fn(num_classes):
+def example_model_fn(num_classes):
 
     def model_fn(features, labels, mode, params):
         del params
@@ -116,7 +117,7 @@ def test_model_fn(num_classes):
                 labels=labels, predictions=tf.argmax(logits, axis=1))
             return {"top_1_accuracy": accuracy}
 
-        model = test_keras_fn(10)()
+        model = example_keras_fn(10)()
         if mode == tf.estimator.ModeKeys.PREDICT:
             outputs = model(image, training=False)
             predictions = {
