@@ -79,17 +79,15 @@ def example_keras_fn(num_classes):
 
     # This input function is an edited version of a the model function from:
     # https://github.com/tensorflow/tpu/blob/master/models/experimental/cifar_keras/cifar_keras.py
-    def keras_model_fn():
+    def keras_model_fn(input_features, is_training):
         """Define a CIFAR model in Keras."""
         layers = tf.keras.layers
         # Pass our input tensor to initialize the Keras input layer.
-        # Edited:
-        # v = layers.Input(tensor=input_features)
-        input_layer = layers.Input(shape=(32, 32, 3))
-        first_layer = layers.Conv2D(filters=32, kernel_size=5,
+        input_layer = layers.Input(tensor=input_features)
+        v = layers.Conv2D(filters=32, kernel_size=5,
                           activation="relu", padding="same")(input_layer)
                           # input_shape=(32, 32, 3))#(input_layer)
-        v = layers.MaxPool2D(pool_size=2, name='maxPool1')(first_layer)
+        v = layers.MaxPool2D(pool_size=2, name='maxPool1')(v)
         v = layers.Conv2D(filters=64, kernel_size=5,
                           activation="relu", padding="same")(v)
         v = layers.MaxPool2D(pool_size=2, name='maxPool2')(v)
@@ -98,10 +96,7 @@ def example_keras_fn(num_classes):
         # Edited:
         # logits = layers.Dense(units=10)(fc1)
         logits = layers.Dense(units=num_classes)(fc1)
-        # Edited:
-        # return logits
-        model = tf.keras.Model(input_layer, logits)
-        return model
+        return logits
 
     return keras_model_fn
 

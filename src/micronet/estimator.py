@@ -3,7 +3,7 @@ from enum import Enum
 import functools
 import time
 import efficientnet
-from collections import namedtuple
+import inspect
 
 # Number of iterations (batches) to run on the TPU workers before returning
 # control to the master (not sure if the terminology is correct here).
@@ -248,8 +248,10 @@ def create_model_fn(keras_model_fn, processor_type, hparams=None):
     That mechanism seems flaky and seems to have poor encapsulation.
 
     Args:
-        keras_model_fn: a function returning a Keras Model. Signature:
-            <function_name>(): keras.models.Model
+        keras_model_fn: a function returning a Keras Model. The signature can
+            one of the following two sigatures:
+                <function_name>(): keras.models.Model
+                <function_name>(input_tensor, is_training): keras.layers.Layer
 
          It seems that placeholder nodes aren't completely incompatible with TPUs,
          but it's not clear where they can be placed:
@@ -322,7 +324,14 @@ def _model_fn(features, labels, mode, params, config,
     # if params['use_bfloat16']:
     #     with tf.contrib.tpu.bfloat16_scope():
     #        logits = tf.cast(build_model(), tf.float32)
-    logit_outputs = keras_model_fn()(image, training=is_training)
+    # Experiment: support two keras_model_fn signatures.
+    keras_model_fn_sig = inspect.signature(keras_model_fn)
+    if len(keras_model_fn_sig.parameters) == 0:
+        logit_outputs = keras_model_fn()(image, training=is_training)
+    elif len(keras_model_fn_sig.parameters) == 2:
+        logit_outputs = keras_model_fn(image, is_training)
+    else:
+        raise Exception('Unsupported keras_model_fn() signature encountered.')
     assert features.get_shape()[0] == batch_size
     if processor_type == ProcessorType.TPU:
         # We know the batch size and can make this assertion:
