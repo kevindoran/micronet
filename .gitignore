@@ -10,6 +10,7 @@ gcloud_env/
 # any non-relative info in there. However, it's auto-generated,
 # so I don't see any use of keeping it.
 src/micronet.egg-info/
+efficientnet_internal.egg-info/
 
 # Swap files
 *.swp
