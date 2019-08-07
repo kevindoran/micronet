@@ -15,9 +15,9 @@ import inspect
 #    "iterations_per_loop can be set to a very large value, with the only
 #    downside being that logging messages and checkpointing can only occur at
 #    the end of a loop."
-ITERATIONS_PER_LOOP = 100
-SAVE_CHECKPOINTS_STEPS = ITERATIONS_PER_LOOP
-checkpoints_max = 0
+ITERATIONS_PER_LOOP = 300
+LOOPS_PER_CHECKPOINT = 10
+SAVE_CHECKPOINTS_STEPS = ITERATIONS_PER_LOOP * LOOPS_PER_CHECKPOINT
 
 ProcessorType = Enum('ProcessorType', 'CPU GPU TPU')
 
