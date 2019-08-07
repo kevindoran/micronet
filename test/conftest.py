@@ -4,6 +4,7 @@ import pytest
 import pytz
 import datetime
 from collections import namedtuple
+import tensorflow as tf
 import os
 
 
@@ -23,6 +24,10 @@ def pytest_runtest_setup(item):
     if 'slow' in item.keywords and not item.config.getoption('slow'):
         pytest.skip('This test is a slow running test (use --slow).')
 
+
+@pytest.fixture(autouse=True)
+def test_setup():
+    tf.logging.set_verbosity(tf.logging.INFO)
 
 @pytest.fixture
 def is_cloud(request):
