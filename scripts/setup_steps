@@ -43,8 +43,10 @@ gcloud auth application-default login
 # remote port with:
 gcloud compute ssh kdoran1 --ssh-flag="-N -f -L localhost:12345:localhost:6006"
 # Alternatively, you can run from local machine.
-# First, install google-cloud-storage:
-pip install --upgrade google-cloud-storage
+# First, on Fedora, I needed to make a link to the system certs (as curl was 
+# expecting them somewhere else):
+sudo ln -s /etc/ssl/certs/ca-bundle.trust.crt /etc/ssl/certs/ca-certificates.crt 
+
 tensorboard --logdir='gs://micronet_bucket1/...'
 
 
@@ -87,4 +89,12 @@ sudo dnf install lysncd
 # The above command results in too many inodes being watched, so I created a config file. 
 # Instead, run:
 lsyncd ./scripts/lsyncd_config
+
+# Jupyter labs
+# Installing the vim plugin, which requires nodejs:
+pip install jupyter # or was it jupyterlab...
+sudo dnf install nodejs
+jupyter labextension install jupyterlab_vim
+# Install spellcheck plugin:
+jupyter labextension install @ijmbarr/jupyterlab_spellchecker
 
