@@ -25,6 +25,7 @@ ProcessorType = Enum('ProcessorType', 'CPU GPU TPU')
 const_learning_rate = 0.045
 learning_rate_base = 0.5
 
+DEFAULT_BATCH_SIZE = 128
 DEFAULT_SKIP_HOST = False
 # FIXME 28. Choose appropriate values.
 DEFAULT_DECAY_RATE = 0.9
@@ -144,8 +145,9 @@ def get_cluster_resolver(gcloud_settings):
 # EfficientNet sets 'steps_per_epoch' in the estimator's params. This is an
 # alternative to sending it to the model creation method. Worth considering
 # which is better.
-def create_tpu_estimator(gcloud_settings, model_dir, model_fn, train_batch_size,
-                         eval_batch_size,
+def create_tpu_estimator(gcloud_settings, model_dir, model_fn,
+                         train_batch_size=DEFAULT_BATCH_SIZE,
+                         eval_batch_size=DEFAULT_BATCH_SIZE,
                          iterations_per_loop=ITERATIONS_PER_LOOP):
     tpu_cluster_resolver = get_cluster_resolver(gcloud_settings)
     if train_batch_size % 128:
@@ -239,7 +241,7 @@ def create_cpu_estimator(model_dir, model_fn):
     return estimator
 
 
-def create_model_fn(keras_model_fn, processor_type, hparams=None):
+def create_model_fn(keras_model_fn, processor_type, loss_fn=None, hparams=None):
     """Bind the parameters of _model_fn that are not part of the Estimator's
     model_fn signature.
 
@@ -252,6 +254,8 @@ def create_model_fn(keras_model_fn, processor_type, hparams=None):
             one of the following two sigatures:
                 <function_name>(): keras.models.Model
                 <function_name>(input_tensor, is_training): keras.layers.Layer
+        loss_fn: a function to create a loss op. The signature is:
+            <function_name>(logits, labels, num_classes, weight_decay): ?
 
          It seems that placeholder nodes aren't completely incompatible with TPUs,
          but it's not clear where they can be placed:
@@ -266,6 +270,7 @@ def create_model_fn(keras_model_fn, processor_type, hparams=None):
     fn = functools.partial(_model_fn,
                            keras_model_fn=keras_model_fn,
                            processor_type=processor_type,
+                           loss_fn=loss_fn,
                            hparams=hparams)
     return fn
 
@@ -293,7 +298,8 @@ def _model_fn(features, labels, mode, params, config,
               # act as a model_fn usable by an estimator:
               keras_model_fn,
               processor_type,
-              hparams):
+              hparams,
+              loss_fn):
     if processor_type == ProcessorType.TPU:
         # Only a TPUEstimator populates the 'batch_size' parameter.
         batch_size = params['batch_size']
@@ -308,6 +314,8 @@ def _model_fn(features, labels, mode, params, config,
         # to be used in the TPU's host call.
         iterations_per_loop = None
     model_dir = config.model_dir
+    if not loss_fn:
+        loss_fn = create_loss_op
     # Note: EfficientNet does some transposing here. I wonder why it is done
     # in the model as opposed to the input function?
     image = features
@@ -338,8 +346,7 @@ def _model_fn(features, labels, mode, params, config,
         assert logit_outputs.get_shape()[0] == batch_size
     num_classes = logit_outputs.get_shape()[1]
 
-    loss_op = create_loss_op(logit_outputs, labels, num_classes,
-                             hparams.weight_decay)
+    loss_op = loss_fn(logit_outputs, labels, num_classes, hparams.weight_decay)
     host_call = None
     # Design choice. Create a TPUEstimator in if-else or outside the if-else?
     # mobilenet takes the first approach, and EfficientNet takes the second.
@@ -590,6 +597,11 @@ def create_loss_op(logits, labels, num_classes, weight_decay):
 def train_and_eval(estimator, train_input_fn, eval_input_fn, train_steps,
                    steps_per_epoch, num_eval_images, steps_between_eval,
                    eval_batch_size):
+    # The API would be nicer if 'train_steps' was instead 'num_train_images'.
+    # However, this would require also passing the batch size. Unless we can
+    # get it from the estimator? But that would be making the assumption that
+    # it is a TPU estimator. It would be nice to keep this method agnostic to
+    # the type of estimator that is being used.
     # TPUEstimator has a public property, model_dir. Let's use that instead of
     # it needing to be passed in.
     model_dir = estimator.model_dir

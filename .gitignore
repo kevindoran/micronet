@@ -21,3 +21,5 @@ __pycache__/
 # Large files in ./resources
 resources/
 
+# Jupyter Labs checkpoints
+*.ipynb_checkpoints
