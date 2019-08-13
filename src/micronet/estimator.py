@@ -3,6 +3,7 @@ from enum import Enum
 import functools
 import time
 import efficientnet
+import efficientnet.utils
 import inspect
 
 # Number of iterations (batches) to run on the TPU workers before returning
@@ -148,7 +149,8 @@ def get_cluster_resolver(gcloud_settings):
 def create_tpu_estimator(gcloud_settings, model_dir, model_fn,
                          train_batch_size=DEFAULT_BATCH_SIZE,
                          eval_batch_size=DEFAULT_BATCH_SIZE,
-                         iterations_per_loop=ITERATIONS_PER_LOOP):
+                         iterations_per_loop=ITERATIONS_PER_LOOP,
+                         warm_start_settings=None):
     tpu_cluster_resolver = get_cluster_resolver(gcloud_settings)
     if train_batch_size % 128:
         raise Warning('Train batch size should be divisible by 128 as the XLA '
@@ -226,7 +228,8 @@ def create_tpu_estimator(gcloud_settings, model_dir, model_fn,
         # params={'key':'value'}. Optional.
         params={},
         # Export a graph supporting PREDICT to be run on a TPU.
-        export_to_tpu=True
+        export_to_tpu=True,
+        warm_start_from=warm_start_settings
         # batch_axis: not sure how to use this.
     )
     return estimator
@@ -234,14 +237,16 @@ def create_tpu_estimator(gcloud_settings, model_dir, model_fn,
 
 # TODO: this should use the same initialize options as the tpu
 # (except for use_tpu, I thinks that's all).
-def create_cpu_estimator(model_dir, model_fn):
+def create_cpu_estimator(model_dir, model_fn, params=None):
     estimator = tf.estimator.Estimator(
         model_fn=model_fn,
-        model_dir=model_dir)
+        model_dir=model_dir,
+        params=params)
     return estimator
 
 
-def create_model_fn(keras_model_fn, processor_type, loss_fn=None, hparams=None):
+def create_model_fn(keras_model_fn, processor_type, loss_fn=None,
+                    metric_fn=None, hparams=None):
     """Bind the parameters of _model_fn that are not part of the Estimator's
     model_fn signature.
 
@@ -271,6 +276,7 @@ def create_model_fn(keras_model_fn, processor_type, loss_fn=None, hparams=None):
                            keras_model_fn=keras_model_fn,
                            processor_type=processor_type,
                            loss_fn=loss_fn,
+                           metric_fn=metric_fn,
                            hparams=hparams)
     return fn
 
@@ -299,7 +305,8 @@ def _model_fn(features, labels, mode, params, config,
               keras_model_fn,
               processor_type,
               hparams,
-              loss_fn):
+              loss_fn,
+              metric_fn):
     if processor_type == ProcessorType.TPU:
         # Only a TPUEstimator populates the 'batch_size' parameter.
         batch_size = params['batch_size']
@@ -316,6 +323,8 @@ def _model_fn(features, labels, mode, params, config,
     model_dir = config.model_dir
     if not loss_fn:
         loss_fn = create_loss_op
+    if not metric_fn:
+        metric_fn = _metric_fn
     # Note: EfficientNet does some transposing here. I wonder why it is done
     # in the model as opposed to the input function?
     image = features
@@ -361,7 +370,7 @@ def _model_fn(features, labels, mode, params, config,
             processor_type,
             hparams)
     elif mode == tf.estimator.ModeKeys.EVAL:
-        estimator_spec = _eval(labels, logit_outputs, loss_op)
+        estimator_spec = _eval(labels, logit_outputs, loss_op, metric_fn)
     elif mode == tf.estimator.ModeKeys.PREDICT:
         estimator_spec = _predict(logit_outputs)
     else:
@@ -374,7 +383,7 @@ def _model_fn(features, labels, mode, params, config,
 
 
 # metric_fn copied from efficientnet/main.py then edited.
-def metric_fn(labels, logits):
+def _metric_fn(labels, logits):
     """Evaluation metric function. Evaluates accuracy.
 
     This function is executed on the CPU and should not directly reference
@@ -416,7 +425,7 @@ def _predict(logit_outputs):
     return estimator_spec
 
 
-def _eval(labels, logit_outputs, loss_op):
+def _eval(labels, logit_outputs, loss_op, metric_fn):
     # From the TPUEstimatorSpec source:
     #     For evaluation, `eval_metrics `is a tuple of `metric_fn` and
     #     `tensors`, where `metric_fn` runs on CPU to generate metrics and
@@ -437,7 +446,7 @@ def _train(loss_op,
     global_step = tf.train.get_global_step()
     # TODO: need to take in examples_per_epoch!
     if hparams.examples_per_epoch:
-        current_epoch = (tf.cast(global_step, tf.float32) /
+        current_epoch = (tf.cast(global_step, tf.float32) * batch_size /
                          hparams.examples_per_epoch)
     else:
         # If no examples_per_epoch setting, act as if there is a single epoch.
@@ -495,8 +504,8 @@ def create_train_op(loss,
     #optimizer = tf.train.RMSPropOptimizer(learning_rate_base, decay=0.90, momentum=0.9)
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
     # FIXME: Learning rate not working
-    #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-    optimizer = tf.train.AdamOptimizer()
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    #optimizer = tf.train.AdamOptimizer()
     if processor_type == ProcessorType.TPU:
         optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
     # TODO: is this the correct value for the step argument?
@@ -505,8 +514,10 @@ def create_train_op(loss,
     # Batch normalization requires UPDATE_OPS to be added as a dependency to
     # the train operation. It's also present in EfficientNet.
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    with tf.control_dependencies(update_ops):
-      train_op = optimizer.minimize(loss, global_step)
+    early_logit = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                    'early_logits')
+    #with tf.control_dependencies(update_ops):
+    train_op = optimizer.minimize(loss, global_step, var_list=[early_logit])
     return train_op, learning_rate
 
 
@@ -605,7 +616,10 @@ def train_and_eval(estimator, train_input_fn, eval_input_fn, train_steps,
     # TPUEstimator has a public property, model_dir. Let's use that instead of
     # it needing to be passed in.
     model_dir = estimator.model_dir
-    current_step = estimator._load_global_step_from_checkpoint_dir(model_dir)
+    # efficientnet used, but seemed unavailable:
+    # current_step = estimator._load_global_step_from_checkpoint_dir(model_dir)
+    # TODO: get actual global step.
+    current_step = 0
     tf.logging.info('Training for %d steps (%.2f epochs in total). Current'
         ' step %d.', train_steps, train_steps / steps_per_epoch, current_step)
 

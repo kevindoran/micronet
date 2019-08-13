@@ -19,7 +19,7 @@ gcloud compute tpus create kdoran1 \
     --zone=us-central1-f \
     --network=default \
     --range="10.128.16.0/29" \
-    --version="1.13" \
+    --version="1.14" \
     --preemptible \
     --accelerator-type="v2-8" \
     --description="TPU created automatically by micronet project script." 

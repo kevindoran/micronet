@@ -10,11 +10,17 @@ development venv setup
 2. Create virtual env:
 virtualenv venv --python=python3.7
 
-3. Install required packages. Check the requirements.txt for updated list.
-You at least need:
-tensorflow==1.13.1
-pytz
-tensorflow-datasets (which requires you to have python3-devel installed in the system.)
+3. init & update submodules
+git submodule init
+git submodule update
+
+4. Install required packages. Use the requirements.txt.
+pip install -r requirements.txt
+
+(You may need to install system level Python development packages. This will be
+the case if you get an error saying "#include <Python.h>" fails. The command
+might be:
+sudo dnf install python3-devel (or sudo apt install python3-dev)
 
 # Google Cloud SDK 
 # Create virtual env (used for connecting to VM)
@@ -97,4 +103,6 @@ sudo dnf install nodejs
 jupyter labextension install jupyterlab_vim
 # Install spellcheck plugin:
 jupyter labextension install @ijmbarr/jupyterlab_spellchecker
+# Install matplotlib
+pip install matplotlib
 
