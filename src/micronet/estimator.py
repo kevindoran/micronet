@@ -24,7 +24,8 @@ ProcessorType = Enum('ProcessorType', 'CPU GPU TPU')
 
 # More parameters to be included.
 const_learning_rate = 0.045
-learning_rate_base = 0.5
+# 0.001 is default Adam learning rate for TF.
+learning_rate_base = 0.01
 
 DEFAULT_BATCH_SIZE = 128
 DEFAULT_SKIP_HOST = False
@@ -504,7 +505,9 @@ def create_train_op(loss,
     #optimizer = tf.train.RMSPropOptimizer(learning_rate_base, decay=0.90, momentum=0.9)
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
     # FIXME: Learning rate not working
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate,
+                                       # 0.1 as recommened by tensorflow docs.
+                                       epsilon=0.1)
     #optimizer = tf.train.AdamOptimizer()
     if processor_type == ProcessorType.TPU:
         optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)

@@ -5,6 +5,7 @@ import micronet.gcloud as gcloud
 import micronet.models
 import micronet.dataset.imagenet as imagenet_ds
 import os
+import efficientnet_model as efnet
 
 TEST_CLASS = 145 # King penguin.
 # EFFICIENTNET_CKPT_DIR = './resources/efficientnet-b0'
@@ -33,7 +34,18 @@ def custom_model(features, is_training):
     # 6th layer output is 40 channels at 56x56 resolution.
     layer_6_output_res = 28
     layer_6_output_channels = 40
-    early_features = tf.keras.layers.GlobalAveragePooling2D()(layer_6_outputs)
+    sc = features#endpoints['reduction_5'] # 14x14x112
+    sc = tf.layers.Conv2D(
+        filters=1280,
+        kernel_size=[1, 1],
+        strides=[1, 1],
+        #kernel_initializer=conv_kernel_initializer,
+        padding='same',
+        use_bias=False)(sc)
+    sc = efnet.batchnorm(axis=-1,
+        momentum=0.99,
+        epsilon=1e-3)(sc)
+    early_features = tf.keras.layers.GlobalAveragePooling2D()(sc)
     binary_logit = tf.layers.Dense(units=1,
                                    # If using a XX_with_logits, then the input to
                                    # the loss is expected to be un-normalized.
@@ -65,7 +77,9 @@ def custom_loss_op(logits, labels, num_classes, weight_decay):
     y = tf.cast(tf.math.equal(TEST_CLASS, labels), tf.float32)
     # loss = max(x, 0) - x * y + log(1 + exp(-abs(x))
     prediction = tf.nn.sigmoid(logits_as_scalar)
-    weights = tf.ones(shape=y.shape, dtype=tf.float32) + 1000 * y
+#    weights = tf.ones(shape=y.shape, dtype=tf.float32) + 10 * y
+    weights = 0.01 * tf.ones(shape=y.shape, dtype=tf.float32) + 100.0 * y
+    weights = tf.stop_gradient(weights)
     cross_entropy = tf.losses.log_loss(labels=y, predictions=prediction,
                                        weights=weights)
 
@@ -102,16 +116,17 @@ def custom_metric_fn(labels, logits):
 
 def main():
     gcloud_settings = gcloud.load_settings()
-    model_dir = 'gs://micronet_bucket1/models/shortcutnet_tpu_3'
+    gcloud_settings.tpu_name = 'kdoran3'
+    model_dir = 'gs://micronet_bucket1/models/shortcutnet_tpu_1_11'
     restore_from= 'gs://micronet_bucket1/models/shortcutnet1_tpu/'
     image_size = 224
     images_per_epoch = 1.2 * 1000 * 1000 # is this correct?
     train_images = images_per_epoch * 10
-    train_batch_size = 128 * (2**3)
-    eval_batch_size = 128
+    train_batch_size = 128 * 8 # 16 runs out of mem, 8 doesn't. Trying 10.
+    eval_batch_size = train_batch_size
     train_steps = train_images // train_batch_size
-    num_eval_images = 100 * 2**10
-    steps_between_eval = 80
+    num_eval_images = 64 * 2**10
+    steps_between_eval = 100
     hparams = micronet.estimator.HParams(examples_per_decay=100000)
     model_fn = micronet.estimator.create_model_fn(
         custom_model, processor_type=micronet.estimator.ProcessorType.TPU,
@@ -121,7 +136,7 @@ def main():
         vars_to_warm_start='efficientnet-b0')
     # Warm starting from efficientnet-b0 should only be needed the first run.
     # warm_start_settings = restore_from
-    warm_start_settings = None
+    # warm_start_settings = None
     est = micronet.estimator.create_tpu_estimator(
               gcloud_settings=gcloud_settings,
               model_dir=model_dir,
@@ -136,11 +151,11 @@ def main():
                                                       params={'batch_size': 64})
     train_input_fn = imagenet_ds.create_train_input(
         image_size=image_size,
-        num_parallel_calls=os.cpu_count(),
+        num_parallel_calls=os.cpu_count()*2,
         for_tpu=True, autoaugment=False).input_fn
     eval_input_fn = imagenet_ds.create_train_input(
         image_size=image_size,
-        num_parallel_calls=os.cpu_count(),
+        num_parallel_calls=os.cpu_count()*2,
         for_tpu=True, autoaugment=False).input_fn
 
     micronet.estimator.train_and_eval(
