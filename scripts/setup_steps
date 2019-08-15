@@ -98,7 +98,7 @@ lsyncd ./scripts/lsyncd_config
 
 # Jupyter labs
 # Installing the vim plugin, which requires nodejs:
-pip install jupyter # or was it jupyterlab...
+pip install jupyterlab
 sudo dnf install nodejs
 jupyter labextension install jupyterlab_vim
 # Install spellcheck plugin:
