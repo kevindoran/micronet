@@ -1,6 +1,8 @@
 import micronet.gcloud as gcloud
 import google.cloud.storage as gc_storage
 import pytest
+import json
+import copy
 
 @pytest.fixture
 def test_settings():
@@ -93,3 +95,66 @@ def test_experiment_dir(test_settings, test_bucket, request):
     assert bucket.get_blob('models/experiments/1/22/' + object_name) is not None
 
 
+def test_get_free_tpu_id():
+    """Tests that _get_free_tpu_id() finds an unused TPU id."""
+    tpu_list_output_example = """
+    [{                 
+    "health": "HEALTHY", 
+    "name": "projects/dummy_project/locations/us-central1-f/nodes/auto_tpu_0",  
+    "state": "READY"  
+    }, {                 
+    "health": "HEALTHY",
+    "name": "projects/dummy_project/locations/us-central1-f/nodes/kdoran1",
+    "state": "STOPPED"
+    }, {
+    "health": "HEALTHY", 
+    "name": "projects/dummy_project/locations/us-central1-f/nodes/auto_tpu_1",  
+    "state": "READY"
+    }, {
+    "health": "HEALTHY",
+    "name": "projects/dummy_project/locations/us-central1-f/nodes/auto_tpu_2",
+    "state": "READY"
+    }, {
+    "health": "HEALTHY",
+    "name": "projects/dummy_project/locations/us-central1-f/nodes/auto_tpu_4",
+    "state": "READY"
+    }]"""
+    project = 'dummy_project'
+    zone = 'us-central1-f'
+    output_as_list = json.loads(tpu_list_output_example)
+
+    # Test
+    # 1. No STOPPED TPUs available.
+    free_id, created = gcloud._get_free_tpu_id(output_as_list,
+                                               project, zone)
+    assert free_id == 3
+    assert not created
+
+    # 2. Stopped TPU available.
+    output_copy = copy.deepcopy(output_as_list)
+    output_copy[3]['state'] = 'STOPPED'
+    free_id, created = gcloud._get_free_tpu_id(output_copy, project, zone)
+    assert free_id == 2
+    assert created
+
+    # 3. Don't exceed the TPU limit.
+    name = 'projects/dummy_project/locations/us-central1-f/nodes/auto_tpu_{}'
+    tpu_list = []
+    for i in range(gcloud.max_tpus - 1):
+        tpu_list.append(
+            {
+                'name': name.format(i),
+                'state': 'READY'
+            }
+        )
+    free_id, created = gcloud._get_free_tpu_id(tpu_list, project, zone)
+    assert free_id == gcloud.max_tpus - 1
+    # Once the limit is reached, exception should be thrown.
+    tpu_list.append(
+        {
+            'name': name.format(gcloud.max_tpus),
+            'state': 'READY'
+        }
+    )
+    with pytest.raises(Exception):
+        gcloud._get_free_tpu_id(free_id, project, zone)
