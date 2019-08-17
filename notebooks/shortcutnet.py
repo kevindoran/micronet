@@ -6,7 +6,7 @@ import micronet.gcloud as gcloud
 import micronet.models
 import micronet.dataset.imagenet as imagenet_ds
 import os
-import efficientnet_model as efnet
+import argparse
 
 TEST_CLASS = 145 # King penguin.
 # EFFICIENTNET_CKPT_DIR = './resources/efficientnet-b0'
@@ -110,6 +110,20 @@ def main():
     test_no = 1
     experiment_no = 14
 
+    # Options
+    parser = argparse.ArgumentParser(
+        description='Run experiment {exp_no} for sortcutnet (test {test_no})'\
+            .format(exp_no=experiment_no, test_no=test_no)
+    )
+    parser.add_argument('-o', '--overwrite', action='store_true',
+                        help='Delete and replace any existing logs for this '
+                             'experiment.')
+    parser.add_argument('-s', '--allow-skip', action='store_true',
+                        help='Allow skipping experiment versions.')
+    args = parser.parse_args()
+    overwrite = args.overwrite
+    allow_skip_minor = args.allow_skip
+
     # Training options
     image_size = 224
     images_per_epoch = 1.2 * 1000 * 1000 # is this correct?
@@ -162,7 +176,9 @@ def main():
     # Estimator
     use_tpu = True
     gcloud_settings = gcloud.load_settings()
-    model_dir = gcloud.experiment_dir(gcloud_settings, test_no, experiment_no)
+    model_dir = gcloud.experiment_dir(gcloud_settings, test_no, experiment_no,
+                                      delete_if_exists=overwrite,
+                                      allow_skip_minor=allow_skip_minor)
     if use_tpu:
         with gcloud.start_tpu(gcloud_settings.project_name,
                               gcloud_settings.tpu_zone) as tpu_name:
