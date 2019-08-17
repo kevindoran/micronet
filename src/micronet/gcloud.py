@@ -94,7 +94,7 @@ def experiment_dir(cloud_settings, experiment_major, experiment_minor,
     if files_exist_in_dir(new_model_dir):
         if dir_exists_behaviour == DirExistsBehaviour.FAIL:
             raise Exception(
-                'Log path already exists:\n\t{}' .format(new_model_dir))
+                'Log path already exists:\n\t{}\n'.format(new_model_dir))
         elif dir_exists_behaviour == DirExistsBehaviour.OVERWRITE:
             blobs_to_delete = bucket.list_blobs(prefix=new_model_dir + '/')
             for b in blobs_to_delete:
@@ -102,10 +102,18 @@ def experiment_dir(cloud_settings, experiment_major, experiment_minor,
                 b.delete()
             assert not files_exist_in_dir(new_model_dir)
         elif dir_exists_behaviour == DirExistsBehaviour.CONTINUE:
+            logging.log(logging.INFO,
+                        'Continuing from existing experiment.')
             pass
         else:
             raise Exception('Unexpected DirExistsBehaviour: {}'
                             .format(dir_exists_behaviour))
+    else:
+        if dir_exists_behaviour in (DirExistsBehaviour.OVERWRITE,
+                                    DirExistsBehaviour.CONTINUE):
+            logging.log(logging.WARN,
+                        "No existing log directory exists, yet '{}' option was"
+                        "provided.".format(dir_exists_behaviour.name))
     full_url = 'gs://{bucket}/{dir}'.format(bucket=cloud_settings.bucket_name,
                                             dir=new_model_dir)
     return full_url
