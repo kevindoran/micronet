@@ -80,7 +80,6 @@ def custom_train_op(loss, processor_type, batch_size, examples_per_decay,
     test_branch_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                          'test_branch')
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    import pdb;pdb.set_trace()
     with tf.control_dependencies(update_ops):
         train_op = optimizer.minimize(loss, global_step,
                                       var_list=test_branch_vars)
@@ -177,7 +176,7 @@ def main():
             eval_batch_size=eval_batch_size)
 
     # Estimator
-    use_tpu = False
+    use_tpu = True
     gcloud_settings = gcloud.load_settings()
     model_dir = gcloud.experiment_dir(gcloud_settings, test_no, experiment_no,
                                       delete_if_exists=overwrite,
