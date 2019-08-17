@@ -79,12 +79,15 @@ def test_experiment_dir(test_settings, test_bucket, request):
     # 4. Experiment directory exists. An exception should be thrown.
     with pytest.raises(Exception):
         gcloud.experiment_dir(test_settings, 1, 2)
-    # 5. Experiment directory not empty, but delete_if_exists=True. Same as #1.
-    # Insure the dummy file is present, as we expect it to be deleted later.
+    # 5. Experiment directory not empty, but dir_exists_behaviour=OVERWRITE.
+    # Same as #1. Insure the dummy file is present, as we expect it to be
+    # deleted later.
     exists = bucket.get_blob('models/experiments/1/2/' + object_name) \
              is not None
     assert exists
-    gcloud.experiment_dir(test_settings, 1, 2, delete_if_exists=True)
+    gcloud.experiment_dir(
+        test_settings, 1, 2,
+        dir_exists_behaviour=gcloud.DirExistsBehaviour.OVERWRITE)
     exists = bucket.get_blob('models/experiments/1/2/' + object_name) \
              is not None
     assert not exists

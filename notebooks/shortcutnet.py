@@ -114,17 +114,34 @@ def main():
 
     # Options
     parser = argparse.ArgumentParser(
-        description='Run experiment {exp_no} for sortcutnet (test {test_no})'\
+        description='Run experiment {exp_no} for shortcutnet (test {test_no})'
             .format(exp_no=experiment_no, test_no=test_no)
     )
     parser.add_argument('-o', '--overwrite', action='store_true',
                         help='Delete and replace any existing logs for this '
                              'experiment.')
+    parser.add_argument('-c', '--continue-training', action='store_true',
+                        help='Continue from a previous checkpoint if logs are'
+                             ' already present.'
+                             'experiment.')
     parser.add_argument('-s', '--allow-skip', action='store_true',
                         help='Allow skipping experiment versions.')
+    parser.add_argument('-t', '--tpu', type=str, required=False,
+                        help='Use a specific TPU.')
     args = parser.parse_args()
     overwrite = args.overwrite
+    continue_training = args.continue_training
+    if overwrite:
+        dir_exists_behaviour = gcloud.DirExistsBehaviour.OVERWRITE
+    elif continue_training:
+        dir_exists_behaviour = gcloud.DirExistsBehaviour.CONTINUE
+    else:
+        dir_exists_behaviour = gcloud.DirExistsBehaviour.FAIL
+    if overwrite and continue_training:
+        raise Exception('Either --overwrite or --continue-training may be '
+                        'provided, but not both')
     allow_skip_minor = args.allow_skip
+    target_tpu = args.tpu
 
     # Training options
     image_size = 224
@@ -179,22 +196,20 @@ def main():
     use_tpu = True
     gcloud_settings = gcloud.load_settings()
     model_dir = gcloud.experiment_dir(gcloud_settings, test_no, experiment_no,
-                                      delete_if_exists=overwrite,
+                                      dir_exists_behaviour=dir_exists_behaviour,
                                       allow_skip_minor=allow_skip_minor)
+    hparams = micronet.estimator.HParams(
+        examples_per_epoch=images_per_epoch,
+        examples_per_decay=100000)
+    model_fn = micronet.estimator.create_model_fn(
+        custom_model,
+        processor_type=micronet.estimator.ProcessorType.TPU,
+        metric_fn=custom_metric_fn, loss_op_fn=custom_loss_op,
+        train_op_fn=custom_train_op,
+        hparams=hparams)
     if use_tpu:
-        with gcloud.start_tpu(gcloud_settings.project_name,
-                              gcloud_settings.tpu_zone) as tpu_name:
-            # Override the TPU setting. The abstractions are not great here.
-            gcloud_settings.tpu_name = tpu_name
-            hparams = micronet.estimator.HParams(
-                examples_per_epoch=images_per_epoch,
-                examples_per_decay=100000)
-            model_fn = micronet.estimator.create_model_fn(
-                custom_model,
-                processor_type=micronet.estimator.ProcessorType.TPU,
-                metric_fn=custom_metric_fn, loss_op_fn=custom_loss_op,
-                train_op_fn=custom_train_op,
-                hparams=hparams)
+        def tpu_est():
+            """Create a TPU. This function is used twice below."""
             est = micronet.estimator.create_tpu_estimator(
                 gcloud_settings=gcloud_settings,
                 model_dir=model_dir,
@@ -202,13 +217,19 @@ def main():
                 train_batch_size=train_batch_size,
                 eval_batch_size=eval_batch_size,
                 warm_start_settings=warm_start_settings)
-            train(est)
+            return est
+
+        if target_tpu:
+            gcloud_settings.tpu_name = target_tpu
+            train(tpu_est())
+        else:
+            with gcloud.start_tpu(gcloud_settings.project_name,
+                                  gcloud_settings.tpu_zone) as tpu_name:
+                # Override the TPU setting. The abstractions are not great here.
+                gcloud_settings.tpu_name = tpu_name
+                train(tpu_est())
     else:
-        model_fn = micronet.estimator.create_model_fn(
-            custom_model,
-            processor_type=micronet.estimator.ProcessorType.CPU,
-            metric_fn=custom_metric_fn, loss_op_fn=custom_loss_op,
-            train_op_fn=custom_train_op)
+        # CPU
         est = micronet.estimator.create_cpu_estimator(
             model_dir, model_fn, params={'batch_size': 64})
         train(est)

@@ -4,6 +4,7 @@ import logging
 from contextlib import contextmanager
 import subprocess
 import re
+import enum
 
 default_settings_file = 'gcloud_settings.json'
 experiments_base_dir = 'models/experiments'
@@ -41,8 +42,10 @@ def as_settings(dct):
                              dct['bucket_name'])
 
 
+DirExistsBehaviour = enum.Enum('DirExistsBehaviour', 'FAIL OVERWRITE CONTINUE')
 def experiment_dir(cloud_settings, experiment_major, experiment_minor,
-                   delete_if_exists=False, allow_skip_minor=False):
+                   dir_exists_behaviour=DirExistsBehaviour.FAIL,
+                   allow_skip_minor=False):
     """Determines the correct path to store an experiment's logs.
 
     To keep track of different experiments that have been tried, they are
@@ -89,15 +92,20 @@ def experiment_dir(cloud_settings, experiment_major, experiment_minor,
                             'Skipping.'.format(prev_experiment_dir))
 
     if files_exist_in_dir(new_model_dir):
-        if not delete_if_exists:
+        if dir_exists_behaviour == DirExistsBehaviour.FAIL:
             raise Exception(
                 'Log path already exists:\n\t{}' .format(new_model_dir))
-        else:
+        elif dir_exists_behaviour == DirExistsBehaviour.OVERWRITE:
             blobs_to_delete = bucket.list_blobs(prefix=new_model_dir + '/')
             for b in blobs_to_delete:
                 assert b.name.startswith(new_model_dir + '/')
                 b.delete()
             assert not files_exist_in_dir(new_model_dir)
+        elif dir_exists_behaviour == DirExistsBehaviour.CONTINUE:
+            pass
+        else:
+            raise Exception('Unexpected DirExistsBehaviour: {}'
+                            .format(dir_exists_behaviour))
     full_url = 'gs://{bucket}/{dir}'.format(bucket=cloud_settings.bucket_name,
                                             dir=new_model_dir)
     return full_url
