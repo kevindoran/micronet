@@ -93,11 +93,11 @@ def custom_metric_fn(labels, logits):
     prediction = tf.nn.sigmoid(logits_as_scalar)
     is_guessed = tf.math.greater(prediction, cutoff)
     accuracy = tf.metrics.accuracy(is_king_penguin, is_guessed)
-    false_positives = tf.metrics.false_positives(is_king_penguin, prediction)
-    true_positives = tf.metrics.true_positives(is_king_penguin, prediction)
-    false_negatives = tf.metrics.false_negatives(is_king_penguin, prediction)
-    true_negatives = tf.metrics.true_negatives(is_king_penguin, prediction)
-    precision = tf.metrics.precision(is_king_penguin, prediction)
+    false_positives = tf.metrics.false_positives(is_king_penguin, is_guessed)
+    true_positives = tf.metrics.true_positives(is_king_penguin, is_guessed)
+    false_negatives = tf.metrics.false_negatives(is_king_penguin, is_guessed)
+    true_negatives = tf.metrics.true_negatives(is_king_penguin, is_guessed)
+    precision = tf.metrics.precision(is_king_penguin, is_guessed)
     return {'top_1_accuracy': accuracy,
             'false_positives': false_positives,
             'true_positives': true_positives,
