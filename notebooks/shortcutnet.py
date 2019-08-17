@@ -53,7 +53,7 @@ def custom_loss_op(logits, labels, num_classes, weight_decay):
     logits_as_scalar = tf.reshape(logits, [-1, ])
     y = tf.cast(tf.math.equal(TEST_CLASS, labels), tf.float32)
     prediction = tf.nn.sigmoid(logits_as_scalar)
-    weights = 0.01 * tf.ones(shape=y.shape, dtype=tf.float32) + 10.0 * y
+    weights = tf.ones(shape=y.shape, dtype=tf.float32)
     weights = tf.stop_gradient(weights)
     cross_entropy = tf.losses.log_loss(labels=y, predictions=prediction,
                                        weights=weights)
@@ -110,7 +110,7 @@ def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
     test_no = 1
-    experiment_no = 16
+    experiment_no = 17
 
     # Options
     parser = argparse.ArgumentParser(
