@@ -153,7 +153,13 @@ def _get_free_tpu_id(tpu_list_output, project_name, zone):
         id = int(m.group(1))
         if tpu['state'] == 'STOPPED':
             # We can use this TPU. It doesn't need to be created.
-            if tpu['health'] != 'HEALTHY':
+            if 'health' not in tpu:
+                # Sometimes 'health' isn't present. It's not clear why the
+                # health key is sometimes not present. So far, it's only been
+                # seen for TPUs that were subsequently started successfully.
+                logging.warning('Found an available TPU, but its health status '
+                                'is not listed.')
+            elif tpu['health'] != 'HEALTHY':
                 logging.warning('Found an available TPU, but it is not healthy'
                                 '. ({})'.format(tpu['state']))
             free_id = (id, True)
