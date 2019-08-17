@@ -78,8 +78,9 @@ def custom_train_op(loss, processor_type, batch_size, examples_per_decay,
     # the train operation. It's also present in EfficientNet.
     global_step = tf.train.get_global_step()
     test_branch_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                         'test_banch')
+                                         'test_branch')
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    import pdb;pdb.set_trace()
     with tf.control_dependencies(update_ops):
         train_op = optimizer.minimize(loss, global_step,
                                       var_list=test_branch_vars)
@@ -110,7 +111,7 @@ def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
     test_no = 1
-    experiment_no = 15
+    experiment_no = 16
 
     # Options
     parser = argparse.ArgumentParser(
@@ -176,7 +177,7 @@ def main():
             eval_batch_size=eval_batch_size)
 
     # Estimator
-    use_tpu = True
+    use_tpu = False
     gcloud_settings = gcloud.load_settings()
     model_dir = gcloud.experiment_dir(gcloud_settings, test_no, experiment_no,
                                       delete_if_exists=overwrite,
@@ -193,6 +194,7 @@ def main():
                 custom_model,
                 processor_type=micronet.estimator.ProcessorType.TPU,
                 metric_fn=custom_metric_fn, loss_op_fn=custom_loss_op,
+                train_op_fn=custom_train_op,
                 hparams=hparams)
             est = micronet.estimator.create_tpu_estimator(
                 gcloud_settings=gcloud_settings,
@@ -206,8 +208,8 @@ def main():
         model_fn = micronet.estimator.create_model_fn(
             custom_model,
             processor_type=micronet.estimator.ProcessorType.CPU,
-            metric_fn=custom_metric_fn,
-            loss_op_fn=custom_loss_op)
+            metric_fn=custom_metric_fn, loss_op_fn=custom_loss_op,
+            train_op_fn=custom_train_op)
         est = micronet.estimator.create_cpu_estimator(
             model_dir, model_fn, params={'batch_size': 64})
         train(est)
