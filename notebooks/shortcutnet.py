@@ -39,14 +39,14 @@ def custom_model(features, is_training):
             momentum=0.99,
             epsilon=1e-3)(sc)
         early_features = tf.keras.layers.GlobalAveragePooling2D()(sc)
-        binary_logit = tf.layers.Dense(
-            units=1,
+        logits = tf.layers.Dense(
+            units=1000,
             # If using a XX_with_logits, then the input to
             # the loss is expected to be un-normalized.
             activation=None,
             # activation='sigmoid',
             name='early_logits')(early_features)
-    return binary_logit
+    return logits
 
 
 def custom_loss_op(logits, labels, num_classes, weight_decay):
@@ -110,7 +110,7 @@ def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
     test_no = 1
-    experiment_no = 17
+    experiment_no = 18
 
     # Options
     parser = argparse.ArgumentParser(
@@ -204,9 +204,7 @@ def main():
     model_fn = micronet.estimator.create_model_fn(
         custom_model,
         processor_type=micronet.estimator.ProcessorType.TPU,
-        metric_fn=custom_metric_fn, loss_op_fn=custom_loss_op,
-        train_op_fn=custom_train_op,
-        hparams=hparams)
+        train_op_fn=custom_train_op, hparams=hparams)
     if use_tpu:
         def tpu_est():
             """Create a TPU. This function is used twice below."""
