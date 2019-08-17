@@ -29,6 +29,7 @@ def pytest_runtest_setup(item):
 def test_setup():
     tf.logging.set_verbosity(tf.logging.INFO)
 
+
 @pytest.fixture
 def is_cloud(request):
     is_cloud = request.config.getoption('--cloud', default=False)
