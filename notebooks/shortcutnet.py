@@ -151,7 +151,9 @@ def main():
     eval_batch_size = train_batch_size
     train_steps = train_images // train_batch_size
     num_eval_images = 64 * 2**10
-    steps_between_eval = 100
+    # steps_between_eval as 100 is nice when paying close attention to a
+    # specific run. Choose a higher value for greater training performance.
+    steps_between_eval = 300
 
     # Warm start settings
     warm_start = True
