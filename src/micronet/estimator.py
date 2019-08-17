@@ -246,8 +246,8 @@ def create_cpu_estimator(model_dir, model_fn, params=None):
     return estimator
 
 
-def create_model_fn(keras_model_fn, processor_type, loss_fn=None,
-                    metric_fn=None, hparams=None):
+def create_model_fn(keras_model_fn, processor_type, loss_op_fn=None,
+                    train_op_fn=None, metric_fn=None, hparams=None):
     """Bind the parameters of _model_fn that are not part of the Estimator's
     model_fn signature.
 
@@ -260,7 +260,7 @@ def create_model_fn(keras_model_fn, processor_type, loss_fn=None,
             one of the following two sigatures:
                 <function_name>(): keras.models.Model
                 <function_name>(input_tensor, is_training): keras.layers.Layer
-        loss_fn: a function to create a loss op. The signature is:
+        loss_op_fn: a function to create a loss op. The signature is:
             <function_name>(logits, labels, num_classes, weight_decay): ?
 
          It seems that placeholder nodes aren't completely incompatible with TPUs,
@@ -276,7 +276,8 @@ def create_model_fn(keras_model_fn, processor_type, loss_fn=None,
     fn = functools.partial(_model_fn,
                            keras_model_fn=keras_model_fn,
                            processor_type=processor_type,
-                           loss_fn=loss_fn,
+                           loss_op_fn=loss_op_fn,
+                           train_op_fn=train_op_fn,
                            metric_fn=metric_fn,
                            hparams=hparams)
     return fn
@@ -306,7 +307,8 @@ def _model_fn(features, labels, mode, params, config,
               keras_model_fn,
               processor_type,
               hparams,
-              loss_fn,
+              loss_op_fn,
+              train_op_fn,
               metric_fn):
     if processor_type == ProcessorType.TPU:
         # Only a TPUEstimator populates the 'batch_size' parameter.
@@ -322,8 +324,10 @@ def _model_fn(features, labels, mode, params, config,
         # to be used in the TPU's host call.
         iterations_per_loop = None
     model_dir = config.model_dir
-    if not loss_fn:
-        loss_fn = create_loss_op
+    if not train_op_fn:
+        train_op_fn = create_train_op
+    if not loss_op_fn:
+        loss_op_fn = create_loss_op
     if not metric_fn:
         metric_fn = _metric_fn
     # Note: EfficientNet does some transposing here. I wonder why it is done
@@ -356,7 +360,7 @@ def _model_fn(features, labels, mode, params, config,
         assert logit_outputs.get_shape()[0] == batch_size
     num_classes = logit_outputs.get_shape()[1]
 
-    loss_op = loss_fn(logit_outputs, labels, num_classes, hparams.weight_decay)
+    loss_op = loss_op_fn(logit_outputs, labels, num_classes, hparams.weight_decay)
     host_call = None
     # Design choice. Create a TPUEstimator in if-else or outside the if-else?
     # mobilenet takes the first approach, and EfficientNet takes the second.
@@ -365,6 +369,7 @@ def _model_fn(features, labels, mode, params, config,
     if mode == tf.estimator.ModeKeys.TRAIN:
         estimator_spec = _train(
             loss_op,
+            train_op_fn,
             batch_size,
             model_dir,
             iterations_per_loop,
@@ -439,6 +444,7 @@ def _eval(labels, logit_outputs, loss_op, metric_fn):
 
 
 def _train(loss_op,
+           train_op_fn,
            batch_size,
            model_dir,
            iterations_per_loop,
@@ -452,7 +458,7 @@ def _train(loss_op,
     else:
         # If no examples_per_epoch setting, act as if there is a single epoch.
         current_epoch = 1
-    train_op, learning_rate = create_train_op(
+    train_op, learning_rate = train_op_fn(
         loss_op, processor_type, batch_size, hparams.examples_per_decay,
         hparams.decay_rate)
 
@@ -504,11 +510,9 @@ def create_train_op(loss,
     # RMSProp doesn't seem to be working for me on CPU or TPU.
     #optimizer = tf.train.RMSPropOptimizer(learning_rate_base, decay=0.90, momentum=0.9)
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-    # FIXME: Learning rate not working
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate,
-                                       # 0.1 as recommened by tensorflow docs.
+    # AdamOptimizer should automatically reduce size of update deltas.
+    optimizer = tf.train.AdamOptimizer(# 0.1 as recommened by tensorflow docs.
                                        epsilon=0.1)
-    #optimizer = tf.train.AdamOptimizer()
     if processor_type == ProcessorType.TPU:
         optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
     # TODO: is this the correct value for the step argument?
@@ -517,10 +521,8 @@ def create_train_op(loss,
     # Batch normalization requires UPDATE_OPS to be added as a dependency to
     # the train operation. It's also present in EfficientNet.
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    early_logit = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                    'early_logits')
-    #with tf.control_dependencies(update_ops):
-    train_op = optimizer.minimize(loss, global_step, var_list=[early_logit])
+    with tf.control_dependencies(update_ops):
+        train_op = optimizer.minimize(loss, global_step)
     return train_op, learning_rate
 
 
@@ -637,7 +639,8 @@ def train_and_eval(estimator, train_input_fn, eval_input_fn, train_steps,
     while current_step < train_steps:
         # Train for up to steps_per_eval number of steps.
         # At the end of training, a checkpoint will be written to --model_dir.
-        next_checkpoint = min(current_step + steps_between_eval, train_steps)
+        next_checkpoint = int(min(current_step + steps_between_eval,
+                                  train_steps))
         estimator.train(input_fn=train_input_fn, max_steps=next_checkpoint)
         current_step = next_checkpoint
 
