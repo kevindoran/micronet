@@ -32,7 +32,7 @@ def custom_model(features, is_training):
             strides=[1, 1],
             kernel_initializer=enet_model.conv_kernel_initializer,
             padding='same',
-            use_bias=False)(features)
+            use_bias=False)(endpoints['reduction_3'])
         # Note: do we need to configure training/not-training for bn?
         sc = enet_model.batchnorm(
             axis=-1,
@@ -109,8 +109,8 @@ def custom_metric_fn(labels, logits):
 def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
-    test_no = 1
-    experiment_no = 20
+    test_no = 2
+    experiment_no = 1
 
     # Options
     parser = argparse.ArgumentParser(
@@ -146,14 +146,14 @@ def main():
     # Training options
     image_size = 224
     images_per_epoch = 1.2 * 1000 * 1000 # is this correct?
-    train_images = images_per_epoch * 10
+    train_images = images_per_epoch * 30
     train_batch_size = 128 * 8 # 16 runs out of mem, 8 doesn't.
     eval_batch_size = train_batch_size
     train_steps = train_images // train_batch_size
     num_eval_images = 64 * 2**10
     # steps_between_eval as 100 is nice when paying close attention to a
     # specific run. Choose a higher value for greater training performance.
-    steps_between_eval = 300
+    steps_between_eval = 200
 
     # Warm start settings
     warm_start = True
