@@ -32,7 +32,7 @@ def custom_model(features, is_training):
             strides=[1, 1],
             kernel_initializer=enet_model.conv_kernel_initializer,
             padding='same',
-            use_bias=False)(endpoints['reduction_2'])
+            use_bias=False)(endpoints['reduction_3'])
         # Note: do we need to configure training/not-training for bn?
         sc = enet_model.batchnorm(
             axis=-1,
@@ -53,8 +53,8 @@ def custom_loss_op(logits, labels, num_classes, weight_decay):
     logits_as_scalar = tf.reshape(logits, [-1, ])
     y = tf.cast(tf.math.equal(TEST_CLASS, labels), tf.float32)
     prediction = tf.nn.sigmoid(logits_as_scalar)
-    # weights = 0.01 * tf.ones(shape=y.shape, dtype=tf.float32) + 10.0 * y
-    weights = tf.ones(shape=y.shape, dtype=tf.float32)
+    weights = 0.01 * tf.ones(shape=y.shape, dtype=tf.float32) + 10.0 * y
+    # weights = tf.ones(shape=y.shape, dtype=tf.float32)
     weights = tf.stop_gradient(weights)
     cross_entropy = tf.losses.log_loss(labels=y, predictions=prediction,
                                        weights=weights)
@@ -89,7 +89,7 @@ def custom_train_op(loss, processor_type, batch_size, examples_per_decay,
 
 def custom_metric_fn(labels, logits):
     is_king_penguin = tf.math.equal(145, labels)
-    cutoff = 0.5 # How to choose this?
+    cutoff = 0.6 # How to choose this?
     logits_as_scalar = tf.reshape(logits, [-1, ])
     prediction = tf.nn.sigmoid(logits_as_scalar)
     is_guessed = tf.math.greater(prediction, cutoff)
@@ -110,8 +110,8 @@ def custom_metric_fn(labels, logits):
 def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
-    test_no = 2
-    experiment_no = 4
+    test_no = 3
+    experiment_no = 1
 
     # Options
     parser = argparse.ArgumentParser(
@@ -158,7 +158,7 @@ def main():
 
     # Warm start settings
     warm_start = True
-    warm_start_from_efficient_net = True
+    warm_start_from_efficient_net = False
     if warm_start:
         # Warm starting from efficientnet should only be needed the first run.
         # It's not clear how warm start interacts with the default behaviour of
@@ -168,8 +168,9 @@ def main():
                 ckpt_to_initialize_from=EFFICIENTNET_CKPT_DIR,
                 vars_to_warm_start='efficientnet-b0')
         else:
-            restore_from = 'gs://micronet_bucket1/models/shortcutnet1_tpu/'
-            warm_start_settings = restore_from
+            warm_start_settings = tf.estimator.WarmStartSettings(
+                ckpt_to_initialize_from = 'gs://micronet_bucket1/models/experiments/2/1',
+                vars_to_warm_start=['.*'])
     else:
         warm_start_settings = None
 
@@ -194,6 +195,13 @@ def main():
             num_eval_images=num_eval_images,
             steps_between_eval=steps_between_eval,
             eval_batch_size=eval_batch_size)
+
+    # Eval only
+    def eval_only(estimator):
+        eval_results = estimator.evaluate(
+            input_fn=eval_input_fn,
+            steps= num_eval_images // eval_batch_size)
+        tf.logging.info('Eval results: %s', eval_results)
 
     # Estimator
     use_tpu = True
@@ -223,18 +231,18 @@ def main():
 
         if target_tpu:
             gcloud_settings.tpu_name = target_tpu
-            train(tpu_est())
+            eval_only(tpu_est())
         else:
             with gcloud.start_tpu(gcloud_settings.project_name,
                                   gcloud_settings.tpu_zone) as tpu_name:
                 # Override the TPU setting. The abstractions are not great here.
                 gcloud_settings.tpu_name = tpu_name
-                train(tpu_est())
+                eval_only(tpu_est())
     else:
         # CPU
         est = micronet.estimator.create_cpu_estimator(
             model_dir, model_fn, params={'batch_size': 64})
-        train(est)
+        eval_only(est)
 
 
 if __name__ == '__main__':
