@@ -53,7 +53,7 @@ def custom_loss_op(logits, labels, num_classes, weight_decay):
     logits_as_scalar = tf.reshape(logits, [-1, ])
     y = tf.cast(tf.math.equal(TEST_CLASS, labels), tf.float32)
     prediction = tf.nn.sigmoid(logits_as_scalar)
-    weights = 0.01 * tf.ones(shape=y.shape, dtype=tf.float32) + 10.0 * y
+    weights = 0.99 * tf.ones(shape=y.shape, dtype=tf.float32) + 10.0 * y
     # weights = tf.ones(shape=y.shape, dtype=tf.float32)
     weights = tf.stop_gradient(weights)
     cross_entropy = tf.losses.log_loss(labels=y, predictions=prediction,
@@ -89,7 +89,7 @@ def custom_train_op(loss, processor_type, batch_size, examples_per_decay,
 
 def custom_metric_fn(labels, logits):
     is_king_penguin = tf.math.equal(145, labels)
-    cutoff = 0.6 # How to choose this?
+    cutoff = 0.50 # How to choose this?
     logits_as_scalar = tf.reshape(logits, [-1, ])
     prediction = tf.nn.sigmoid(logits_as_scalar)
     is_guessed = tf.math.greater(prediction, cutoff)
@@ -110,7 +110,7 @@ def custom_metric_fn(labels, logits):
 def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
-    test_no = 3
+    test_no = 4
     experiment_no = 1
 
     # Options
@@ -147,7 +147,7 @@ def main():
     # Training options
     image_size = 224
     images_per_epoch = 1.2 * 1000 * 1000 # is this correct?
-    train_images = images_per_epoch * 30
+    train_images = images_per_epoch * 50
     train_batch_size = 128 * 8 # 16 runs out of mem, 8 doesn't.
     eval_batch_size = train_batch_size
     train_steps = train_images // train_batch_size
@@ -158,7 +158,7 @@ def main():
 
     # Warm start settings
     warm_start = True
-    warm_start_from_efficient_net = False
+    warm_start_from_efficient_net = True
     if warm_start:
         # Warm starting from efficientnet should only be needed the first run.
         # It's not clear how warm start interacts with the default behaviour of
@@ -231,18 +231,18 @@ def main():
 
         if target_tpu:
             gcloud_settings.tpu_name = target_tpu
-            eval_only(tpu_est())
+            train(tpu_est())
         else:
             with gcloud.start_tpu(gcloud_settings.project_name,
                                   gcloud_settings.tpu_zone) as tpu_name:
                 # Override the TPU setting. The abstractions are not great here.
                 gcloud_settings.tpu_name = tpu_name
-                eval_only(tpu_est())
+                train(tpu_est())
     else:
         # CPU
         est = micronet.estimator.create_cpu_estimator(
             model_dir, model_fn, params={'batch_size': 64})
-        eval_only(est)
+        train(est)
 
 
 if __name__ == '__main__':
