@@ -89,7 +89,7 @@ def custom_train_op(loss, processor_type, batch_size, examples_per_decay,
 
 def custom_metric_fn(labels, logits):
     is_king_penguin = tf.math.equal(145, labels)
-    cutoff = 0.6 # How to choose this?
+    cutoff = 0.8 # How to choose this?
     logits_as_scalar = tf.reshape(logits, [-1, ])
     prediction = tf.nn.sigmoid(logits_as_scalar)
     is_guessed = tf.math.greater(prediction, cutoff)
@@ -110,8 +110,8 @@ def custom_metric_fn(labels, logits):
 def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
-    test_no = 3
-    experiment_no = 1
+    test_no = 4
+    experiment_no = 7
 
     # Options
     parser = argparse.ArgumentParser(
@@ -169,7 +169,7 @@ def main():
                 vars_to_warm_start='efficientnet-b0')
         else:
             warm_start_settings = tf.estimator.WarmStartSettings(
-                ckpt_to_initialize_from = 'gs://micronet_bucket1/models/experiments/2/1',
+                ckpt_to_initialize_from = 'gs://micronet_bucket1/models/experiments/4/6',
                 vars_to_warm_start=['.*'])
     else:
         warm_start_settings = None
