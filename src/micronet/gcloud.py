@@ -43,7 +43,12 @@ def as_settings(dct):
 
 
 DirExistsBehaviour = enum.Enum('DirExistsBehaviour', 'FAIL OVERWRITE CONTINUE')
-def experiment_dir(cloud_settings, experiment_major, experiment_minor,
+
+
+def experiment_dir(cloud_settings,
+                   experiment_major,
+                   experiment_minor,
+                   experiment_patch,
                    dir_exists_behaviour=DirExistsBehaviour.FAIL,
                    allow_skip_minor=False):
     """Determines the correct path to store an experiment's logs.
@@ -57,19 +62,21 @@ def experiment_dir(cloud_settings, experiment_major, experiment_minor,
     misdirected experimentation.
 
     :param cloud_settings: used to determine which bucket to use.
-    :param experiment_major: group ID for set of experiments
-    :param experiment_minor: ID of experiment
+    :param experiment_major: major version for experiment.
+    :param experiment_minor: minor version for experment.
+    :param experiment_patch: patch version for experiment.
     :param delete_if_exists: delete all files in the corresponding directory
         if it is not empty.
     :param allow_skip_minor: allow gaps in the minor ID.
 
     :return (str): the directory to use for logging for the given experiment.
     """
-    dir_fmt = experiments_base_dir + '/{major}/{minor}'
+    dir_fmt = experiments_base_dir + '/{major}/{minor}/{patch}'
     storage_client = gc_storage.Client()
     bucket = storage_client.get_bucket(cloud_settings.bucket_name)
     new_model_dir = dir_fmt.format(major=experiment_major,
-                                   minor=experiment_minor)
+                                   minor=experiment_minor,
+                                   patch=experiment_patch)
 
     def files_exist_in_dir(dir):
         # Add '/' suffix. We use this variable for string matching and don't
@@ -78,9 +85,10 @@ def experiment_dir(cloud_settings, experiment_major, experiment_minor,
             dir += '/'
         return len(list(bucket.list_blobs(prefix=dir))) > 0
 
-    if experiment_minor > 1:
+    if experiment_patch > 1:
         prev_experiment_dir = dir_fmt.format(major=experiment_major,
-                                             minor=experiment_minor - 1)
+                                             minor=experiment_minor,
+                                             patch=experiment_patch - 1)
         if not files_exist_in_dir(prev_experiment_dir):
             if not allow_skip_minor:
                 raise Exception('Trying to create folder:\n\t{}\n'

@@ -42,24 +42,30 @@ def test_experiment_dir(test_settings, test_bucket, request):
 
     dummy_dirs = [
         # models/experiments/
-        'models/experiments/1/1',
-        'models/experiments/1/2',
-        # 'models/experiments/1/3 is created in test 1,
-        # 'models/experiments/1/4 is kept empty when testing creation of 5,
-        # 'models/experiments/1/5 is created in test 3,
-        'models/experiments/1/6',
-        'models/experiments/1/6/sub_dir/',
-        'models/experiments/1/20',
-        'models/experiments/1/21',
-        'models/experiments/1/22',
-        'models/experiments/1/30',
-        'models/experiments/1/50',
-        'models/experiments/1/52',
-        'models/experiments/1/111',
-        'models/experiments/2/1',
-        'models/experiments/2/2',
-        'models/experiments/2/3',
-        'models/experiments/2/4'
+        'models/experiments/1/1/1',
+        'models/experiments/1/1/2',
+        # 'models/experiments/1/1/3 is created in test 1,
+        # 'models/experiments/1/1/4 is kept empty when testing creation of 5,
+        # 'models/experiments/1/1/5 is created in test 3,
+        'models/experiments/1/1/6',
+        'models/experiments/1/1/6/sub_dir/',
+        'models/experiments/1/1/20',
+        'models/experiments/1/1/21',
+        'models/experiments/1/1/22',
+        'models/experiments/1/1/30',
+        'models/experiments/1/1/50',
+        'models/experiments/1/1/52',
+        'models/experiments/1/1/111',
+        'models/experiments/1/2/1',
+        'models/experiments/1/2/2',
+        'models/experiments/1/2/3',
+        'models/experiments/1/2/4'
+        'models/experiments/2/1/1'
+        'models/experiments/2/1/2'
+        'models/experiments/2/1/10'
+        'models/experiments/2/2/1'
+        'models/experiments/2/2/10'
+        'models/experiments/2/2/20'
     ]
     for d in dummy_dirs:
         blob = test_bucket.blob(blob_name='{}/{}'.format(d, object_name))
@@ -69,33 +75,35 @@ def test_experiment_dir(test_settings, test_bucket, request):
 
     # Test
     # 1. Basic case. Function returns the expected experiment dir.
-    exp_dir = gcloud.experiment_dir(test_settings, 1, 3)
-    assert exp_dir == base_url + 'models/experiments/1/3'
+    exp_dir = gcloud.experiment_dir(test_settings, 1, 1, 3)
+    assert exp_dir == base_url + 'models/experiments/1/1/3'
     # 2. Previous experiment directory is empty. An exception should be thrown.
     with pytest.raises(Exception):
-        gcloud.experiment_dir(test_settings, 1, 5)
+        gcloud.experiment_dir(test_settings, 1, 1, 5)
     # 3. Previous experiment directory is empty, but skip=True. Same as #1.
-    gcloud.experiment_dir(test_settings, 1, 5, allow_skip_minor=True)
+    gcloud.experiment_dir(test_settings, 1, 1, 5, allow_skip_minor=True)
     # 4. Experiment directory exists. An exception should be thrown.
     with pytest.raises(Exception):
-        gcloud.experiment_dir(test_settings, 1, 2)
+        gcloud.experiment_dir(test_settings, 1, 1, 2)
     # 5. Experiment directory not empty, but dir_exists_behaviour=OVERWRITE.
     # Same as #1. Insure the dummy file is present, as we expect it to be
     # deleted later.
-    exists = bucket.get_blob('models/experiments/1/2/' + object_name) \
+    exists = bucket.get_blob('models/experiments/1/1/2/' + object_name) \
              is not None
     assert exists
     gcloud.experiment_dir(
-        test_settings, 1, 2,
+        test_settings, 1, 1, 2,
         dir_exists_behaviour=gcloud.DirExistsBehaviour.OVERWRITE)
-    exists = bucket.get_blob('models/experiments/1/2/' + object_name) \
+    # Insure the pre-existing file is deleted.
+    # If not present, get_blobs() returns None.
+    exists = bucket.get_blob('models/experiments/1/1/2/' + object_name) \
              is not None
     assert not exists
-    # In addition, nothing from experiments/1/20, experiments/1/21, etc should
-    # be deleted. If not present, get_blobs() returns None.
-    assert bucket.get_blob('models/experiments/1/20/' + object_name) is not None
-    assert bucket.get_blob('models/experiments/1/21/' + object_name) is not None
-    assert bucket.get_blob('models/experiments/1/22/' + object_name) is not None
+    # In addition, nothing from other experiments should be deleted.
+    for d in dummy_dirs:
+        if d == 'models/experiments/1/1/2':
+            continue
+        assert bucket.get_blob(d + '/' + object_name) is not None
 
 
 def test_get_free_tpu_id():
