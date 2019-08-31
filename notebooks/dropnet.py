@@ -11,7 +11,8 @@ import numpy as np
 
 EFFICIENTNET_CKPT_DIR = 'gs://micronet_bucket1/models/efficientnet-b0/'
 tf.logging.set_verbosity(tf.logging.INFO)
-use_tpu = False
+use_tpu = True
+
 
 def model_fn(features, labels, mode, params):
     assert mode == tf.estimator.ModeKeys.EVAL
@@ -23,66 +24,35 @@ def model_fn(features, labels, mode, params):
     logits, endpoints = enet_builder.build_model(
         image_inputs, model_name='efficientnet-b0', training=True)
     softmax_logits = tf.nn.softmax(logits, name='orig_softmax')
-    features = endpoints['expanded_features']
-    orig_pool = endpoints['global_pool']
-    fc_layer = endpoints['head']
-    dim = 7
-    masked_logits = []
-    for i in range(dim):
-        for j in range(dim):
-            numpy_mask = np.ones((dim, dim))
-            # Add the channel dimension so that the mask can be broadcast to
-            # the feature tensor.
-            numpy_mask = numpy_mask.reshape((dim, dim, 1))
-            numpy_mask[i, j] = 0.0
-            mask = tf.convert_to_tensor(numpy_mask, dtype=tf.float32)
-            masked_features = features * mask
-            pool = tf.keras.layers.GlobalAveragePooling2D(
-                data_format='channels_last')(masked_features)
-            #logits_ij = tf.layers.Dense(1000, activation='softmax',
-            #                            name = '{}_{}_fc'.format(i, j))
-            fc_layer_name = fc_layer.name#'efficientnet-b0/head/?'
-            fc_layer_name = 'efficientnet-b0/model/head/dense'
-            layer_view = tf.contrib.graph_editor.make_view_from_scope(
-                fc_layer_name, tf.get_default_graph())
-            replacements = {orig_pool: pool}
-            scope = 'mask_{}_{}'.format(i, j)
-            sgv, info = tf.contrib.graph_editor.copy_with_input_replacements(
-                layer_view, replacements, dst_scope=scope)
-            head_ij = info.transformed(endpoints['head'])
-            masked_logits.append(head_ij)
-    stacked_logits = tf.stack(masked_logits)
     # Why is loss a requirement when just evaluating?
     num_classes = logits.get_shape()[1]
     one_hot_labels = tf.one_hot(labels, num_classes)
     cross_entropy = tf.losses.softmax_cross_entropy(
-        logits=logits,
+        logits=softmax_logits,
         onehot_labels=one_hot_labels,
         # What does this do?
         label_smoothing=0.1)
     estimator_spec = tf.contrib.tpu.TPUEstimatorSpec(
         mode=tf.estimator.ModeKeys.EVAL, loss=cross_entropy,
-        eval_metrics=(metric_fn, [labels, logits, stacked_logits]))
+        eval_metrics=(metric_fn, [labels, logits]))
     if not use_tpu:
         estimator_spec = estimator_spec.as_estimator_spec()
     return estimator_spec
 
 
-def metric_fn(labels, logits, stacked_logits):
+def metric_fn(labels, logits):
     orig_guess = tf.argmax(logits, axis=1)
     accuracy = tf.metrics.accuracy(labels, orig_guess)
     metrics = {'accuracy': accuracy}
-    for i in range(stacked_logits.shape[0]):
-        guess = tf.argmax(stacked_logits[i], axis=1)
-        metrics['mask_accuracy_' + str(i)] = tf.metrics.accuracy(labels, guess)
     return metrics
+
 
 def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
     test_major = 2
     test_minor = 1
-    test_patch = 1
+    test_patch = 5
 
     # Options
     parser = argparse.ArgumentParser(
@@ -117,9 +87,8 @@ def main():
 
     # Training options
     image_size = 224
-    images_per_epoch = 1.2 * 1000 * 1000 # is this correct?
-    eval_batch_size = 32
-    num_eval_images = 64 * 2**10
+    eval_batch_size = 128 * 8
+    num_eval_images = 10 * 64 * 2**10
 
     # Warm start
     warm_start_settings = tf.estimator.WarmStartSettings(
@@ -129,7 +98,7 @@ def main():
     # Input functions
     eval_input_fn = imagenet_ds.create_train_input(
         image_size=image_size,
-        num_parallel_calls=os.cpu_count()*2,
+        num_parallel_calls=os.cpu_count(),
         for_tpu=True, autoaugment=False).input_fn
 
     # Eval only
@@ -145,9 +114,6 @@ def main():
         gcloud_settings, test_major, test_minor, test_patch,
         dir_exists_behaviour=dir_exists_behaviour,
         allow_skip_minor=allow_skip_patch)
-    hparams = micronet.estimator.HParams(
-        examples_per_epoch=images_per_epoch,
-        examples_per_decay=100000)
     if use_tpu:
         def tpu_est():
             """Create a TPU. This function is used twice below."""
@@ -173,7 +139,7 @@ def main():
         est = tf.estimator.Estimator(
             model_fn=model_fn,
             model_dir=model_dir,
-            params={'batch_size':64},
+            params={'batch_size':eval_batch_size},
             warm_start_from=warm_start_settings)
         eval_only(est)
 
