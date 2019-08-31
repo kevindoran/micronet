@@ -8,13 +8,14 @@ import micronet.dataset.imagenet as imagenet_ds
 import os
 import argparse
 import numpy as np
+import functools
 
 EFFICIENTNET_CKPT_DIR = 'gs://micronet_bucket1/models/efficientnet-b0/'
 tf.logging.set_verbosity(tf.logging.INFO)
 use_tpu = True
 
 
-def model_fn(features, labels, mode, params):
+def model_fn(mask_count, features, labels, mode, params):
     assert mode == tf.estimator.ModeKeys.EVAL
     batch_size = params['batch_size']
     image_inputs = features
@@ -22,7 +23,8 @@ def model_fn(features, labels, mode, params):
                                                    enet_builder.MEAN_RGB,
                                                    enet_builder.STDDEV_RGB)
     logits, endpoints = enet_builder.build_model(
-        image_inputs, model_name='efficientnet-b0', training=True)
+        image_inputs, model_name='efficientnet-b0', training=True,
+        mask_count=mask_count)
     softmax_logits = tf.nn.softmax(logits, name='orig_softmax')
     # Why is loss a requirement when just evaluating?
     num_classes = logits.get_shape()[1]
@@ -51,8 +53,8 @@ def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
     test_major = 2
-    test_minor = 1
-    test_patch = 5
+    test_minor = 3
+    test_patch = 1
 
     # Options
     parser = argparse.ArgumentParser(
@@ -88,7 +90,7 @@ def main():
     # Training options
     image_size = 224
     eval_batch_size = 128 * 8
-    num_eval_images = 10 * 64 * 2**10
+    num_eval_images = 20 * 64 * 2**10
 
     # Warm start
     warm_start_settings = tf.estimator.WarmStartSettings(
@@ -107,41 +109,52 @@ def main():
             input_fn=eval_input_fn,
             steps= num_eval_images // eval_batch_size)
         tf.logging.info('Eval results: %s', eval_results)
+        return eval_results
 
     # Estimator
     gcloud_settings = gcloud.load_settings()
-    model_dir = gcloud.experiment_dir(
-        gcloud_settings, test_major, test_minor, test_patch,
-        dir_exists_behaviour=dir_exists_behaviour,
-        allow_skip_minor=allow_skip_patch)
-    if use_tpu:
-        def tpu_est():
-            """Create a TPU. This function is used twice below."""
-            est = micronet.estimator.create_tpu_estimator(
-                gcloud_settings=gcloud_settings,
-                model_dir=model_dir,
-                model_fn=model_fn,
-                # train_batch_size=None,
-                eval_batch_size=eval_batch_size,
-                warm_start_settings=warm_start_settings)
-            return est
-        if target_tpu:
-            gcloud_settings.tpu_name = target_tpu
-            eval_only(tpu_est())
+
+    pixel_count = 49
+    res = {}
+    for p in range(pixel_count):
+        patch = test_patch + p
+        model_dir = gcloud.experiment_dir(
+            gcloud_settings, test_major, test_minor, patch,
+            dir_exists_behaviour=dir_exists_behaviour,
+            allow_skip_minor=allow_skip_patch)
+        bound_model_fn = functools.partial(model_fn, p)
+        if use_tpu:
+            def tpu_est():
+                """Create a TPU. This function is used twice below."""
+                est = micronet.estimator.create_tpu_estimator(
+                    gcloud_settings=gcloud_settings,
+                    model_dir=model_dir,
+                    model_fn=bound_model_fn,
+                    # train_batch_size=None,
+                    eval_batch_size=eval_batch_size,
+                    warm_start_settings=warm_start_settings)
+                return est
+            if target_tpu:
+                gcloud_settings.tpu_name = target_tpu
+                eval_res = eval_only(tpu_est())
+            else:
+                with gcloud.start_tpu(gcloud_settings.project_name,
+                                      gcloud_settings.tpu_zone) as tpu_name:
+                    # Override the TPU setting. The abstractions are not great here.
+                    gcloud_settings.tpu_name = tpu_name
+                    eval_res = eval_only(tpu_est())
         else:
-            with gcloud.start_tpu(gcloud_settings.project_name,
-                                  gcloud_settings.tpu_zone) as tpu_name:
-                # Override the TPU setting. The abstractions are not great here.
-                gcloud_settings.tpu_name = tpu_name
-                eval_only(tpu_est())
-    else:
-        # CPU
-        est = tf.estimator.Estimator(
-            model_fn=model_fn,
-            model_dir=model_dir,
-            params={'batch_size':eval_batch_size},
-            warm_start_from=warm_start_settings)
-        eval_only(est)
+            # CPU
+            est = tf.estimator.Estimator(
+                model_fn=model_fn,
+                model_dir=model_dir,
+                params={'batch_size':eval_batch_size},
+                warm_start_from=warm_start_settings)
+            eval_res = eval_only(est)
+        res[p] = eval_res
+    print(res)
+    with open('./out.txt') as f:
+        f.write(str(res))
 
 
 if __name__ == '__main__':
