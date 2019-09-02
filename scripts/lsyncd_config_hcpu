@@ -9,8 +9,8 @@ settings {
 sync {
     default.rsyncssh,
     source="/home/k/Sync/micronet/",
---    host="kdoran-hcpu.us-central1-f.micronet-kdoran",
-    host="kdoran1.us-central1-f.micronet-kdoran",
+    host="kdoran-hcpu.us-central1-f.micronet-kdoran",
+--   host="kdoran1.us-central1-f.micronet-kdoran",
     targetdir="micronet_lsyncd",
     delay=4, -- seconds to wait while aggregating. Default is 15.
     exclude={"venv", 

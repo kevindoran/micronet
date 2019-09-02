@@ -89,7 +89,7 @@ def custom_train_op(loss, processor_type, batch_size, examples_per_decay,
 
 def custom_metric_fn(labels, logits):
     is_king_penguin = tf.math.equal(145, labels)
-    cutoff = 0.50 # How to choose this?
+    cutoff = 0.8 # How to choose this?
     logits_as_scalar = tf.reshape(logits, [-1, ])
     prediction = tf.nn.sigmoid(logits_as_scalar)
     is_guessed = tf.math.greater(prediction, cutoff)
@@ -110,13 +110,14 @@ def custom_metric_fn(labels, logits):
 def main():
     # Test-experiment identifier
     # Hard-coding the id makes it is easy to match commits to experiment notes.
-    test_no = 4
-    experiment_no = 6
+    test_major = 1
+    test_minor = 4
+    experiment_no = 7
 
     # Options
     parser = argparse.ArgumentParser(
         description='Run experiment {exp_no} for shortcutnet (test {test_no})'
-            .format(exp_no=experiment_no, test_no=test_no)
+            .format(exp_no=experiment_no, test_no=test_minor)
     )
     parser.add_argument('-o', '--overwrite', action='store_true',
                         help='Delete and replace any existing logs for this '
@@ -169,7 +170,7 @@ def main():
                 vars_to_warm_start='efficientnet-b0')
         else:
             warm_start_settings = tf.estimator.WarmStartSettings(
-                ckpt_to_initialize_from = 'gs://micronet_bucket1/models/experiments/2/1',
+                ckpt_to_initialize_from = 'gs://micronet_bucket1/models/experiments/4/6',
                 vars_to_warm_start=['.*'])
     else:
         warm_start_settings = None
@@ -206,9 +207,10 @@ def main():
     # Estimator
     use_tpu = True
     gcloud_settings = gcloud.load_settings()
-    model_dir = gcloud.experiment_dir(gcloud_settings, test_no, experiment_no,
-                                      dir_exists_behaviour=dir_exists_behaviour,
-                                      allow_skip_minor=allow_skip_minor)
+    model_dir = gcloud.experiment_dir(
+        gcloud_settings, test_major, test_minor, experiment_no,
+        dir_exists_behaviour=dir_exists_behaviour,
+        allow_skip_minor=allow_skip_minor)
     hparams = micronet.estimator.HParams(
         examples_per_epoch=images_per_epoch,
         examples_per_decay=100000)

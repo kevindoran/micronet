@@ -8,7 +8,7 @@ settings {
 -- other applications such as pycharm.
 sync {
     default.rsyncssh,
-    source="/home/k/Sync/micronet/",
+    source="/home/k/snap/syncthing/common/Sync/micronet",
 --    host="kdoran-hcpu.us-central1-f.micronet-kdoran",
     host="kdoran1.us-central1-f.micronet-kdoran",
     targetdir="micronet_lsyncd",
@@ -23,7 +23,7 @@ sync {
              ".*~",
              "gcloud_env"
              ,"tensorflow_models"
---             ,"tensorflow_tpu"
+             ,"tensorflow_tpu"
             },
     delete='startup' -- Lsyncd will delete files on target when starting (if needed to keep target folder in sync with source).
 }
