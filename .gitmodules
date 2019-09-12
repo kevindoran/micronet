@@ -4,3 +4,6 @@
 [submodule "tensorflow_tpu"]
 	path = tensorflow_tpu
 	url = https://github.com/tensorflow/tpu.git
+[submodule "gresearch"]
+	path = gresearch
+	url = https://github.com/google-research/google-research
