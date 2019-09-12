@@ -6,9 +6,8 @@ import micronet.gcloud as gcloud
 import micronet.models
 import micronet.dataset.imagenet as imagenet_ds
 import os
-import argparse
-import numpy as np
 import functools
+import micronet.experiments.args as experiment_args
 
 EFFICIENTNET_CKPT_DIR = 'gs://micronet_bucket1/models/efficientnet-b0/'
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -57,35 +56,9 @@ def main():
     test_patch = 1
 
     # Options
-    parser = argparse.ArgumentParser(
-        description='Run experiment {major}.{minor}.{patch}'
-            .format(major=test_major, minor=test_minor, patch=test_patch)
-    )
-    parser.add_argument('-o', '--overwrite', action='store_true',
-                        help='Delete and replace any existing logs for this '
-                             'experiment.')
-    parser.add_argument('-c', '--continue-training', action='store_true',
-                        help='Continue from a previous checkpoint if logs are'
-                             ' already present.'
-                             'experiment.')
-    parser.add_argument('-s', '--allow-skip', action='store_true',
-                        help='Allow skipping experiment patch versions.')
-    parser.add_argument('-t', '--tpu', type=str, required=False,
-                        help='Use a specific TPU.')
-    args = parser.parse_args()
-    overwrite = args.overwrite
-    continue_training = args.continue_training
-    if overwrite:
-        dir_exists_behaviour = gcloud.DirExistsBehaviour.OVERWRITE
-    elif continue_training:
-        dir_exists_behaviour = gcloud.DirExistsBehaviour.CONTINUE
-    else:
-        dir_exists_behaviour = gcloud.DirExistsBehaviour.FAIL
-    if overwrite and continue_training:
-        raise Exception('Either --overwrite or --continue-training may be '
-                        'provided, but not both')
-    allow_skip_patch = args.allow_skip
-    target_tpu = args.tpu
+    description = 'Run experiment {major}.{minor}.{patch}'.format(
+        major=test_major, minor=test_minor, patch=test_patch)
+    args = experiment_args.parse_args(description)
 
     # Training options
     image_size = 224
@@ -120,8 +93,8 @@ def main():
         patch = test_patch + p
         model_dir = gcloud.experiment_dir(
             gcloud_settings, test_major, test_minor, patch,
-            dir_exists_behaviour=dir_exists_behaviour,
-            allow_skip_minor=allow_skip_patch)
+            dir_exists_behaviour=args.dir_exists_behaviour,
+            allow_skip_minor=args.allow_skip_patch)
         bound_model_fn = functools.partial(model_fn, p)
         if use_tpu:
             def tpu_est():
@@ -134,8 +107,8 @@ def main():
                     eval_batch_size=eval_batch_size,
                     warm_start_settings=warm_start_settings)
                 return est
-            if target_tpu:
-                gcloud_settings.tpu_name = target_tpu
+            if args.target_tpu:
+                gcloud_settings.tpu_name = args.target_tpu
                 eval_res = eval_only(tpu_est())
             else:
                 with gcloud.start_tpu(gcloud_settings.project_name,
