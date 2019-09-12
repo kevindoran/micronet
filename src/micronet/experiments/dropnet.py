@@ -116,7 +116,7 @@ def main():
 
     pixel_count = 49
     res = {}
-    for p in range(pixel_count):
+    for p in [49]:
         patch = test_patch + p
         model_dir = gcloud.experiment_dir(
             gcloud_settings, test_major, test_minor, patch,
