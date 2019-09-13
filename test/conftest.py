@@ -89,19 +89,24 @@ def estimator_fn(is_cloud, tmpdir, gcloud_temp_path):
         model_dir = str(tmpdir.mkdir('model'))
 
     # The factory function to be returned:
-    def create_estimator(keras_model_fn, train_batch_size, eval_batch_size):
+    def create_estimator(keras_model_fn, train_batch_size,
+                         eval_batch_size=None,
+                         warm_start_settings=None):
         """Create and return an estimator. Could be a CPU or TPU estimator.
 
         Args:
             keras_model_fn: a function returning a Keras model.
-            train_batch_size: the batch used for training. This will be ignored
-                if a CPU estimator is created.
+            train_batch_size: the batch used for training. This will taken as
+                the single batch size for standard Estimator (CPU & GPU).
             eval_batch_size: the batch used when evaluating. This will be
                 ignored if a CPU estimator is created.
+            warm_start_settings: passed to Estimator constructor.
 
         Returns:
             A tf.Estimator or tf.TPUEstimator.
         """
+        if eval_batch_size is None:
+            eval_batch_size = train_batch_size
         if use_tpu:
             model_fn = micronet.estimator.create_model_fn(
                 keras_model_fn, micronet.estimator.ProcessorType.TPU)
@@ -113,7 +118,8 @@ def estimator_fn(is_cloud, tmpdir, gcloud_temp_path):
                 try:
                     estimator = micronet.estimator.create_tpu_estimator(
                         gcloud_settings, model_dir, model_fn, train_batch_size,
-                        eval_batch_size)
+                        eval_batch_size,
+                        warm_start_settings=warm_start_settings)
                     break
                 except RuntimeError:
                     if i == retries - 1:
@@ -123,10 +129,14 @@ def estimator_fn(is_cloud, tmpdir, gcloud_temp_path):
                     continue
             assert estimator
         else:
+            # Some input functions expect a params['batch_size']. Use the
+            # train batch size.
+            params = {'batch_size': train_batch_size}
             model_fn = micronet.estimator.create_model_fn(
                 keras_model_fn, micronet.estimator.ProcessorType.CPU)
-            estimator = micronet.estimator.create_cpu_estimator(model_dir,
-                                                                model_fn)
+            estimator = micronet.estimator.create_cpu_estimator(
+                model_dir, model_fn, params,
+                warm_start_settings=warm_start_settings)
         return estimator
 
     return create_estimator

@@ -22,7 +22,7 @@ import os
 import re
 import tensorflow as tf
 
-import efficientnet_model
+import micronet.experiments.sequential_pool.efficientnet_model as efnet_model
 
 MEAN_RGB = [0.485 * 255, 0.456 * 255, 0.406 * 255]
 STDDEV_RGB = [0.229 * 255, 0.224 * 255, 0.225 * 255]
@@ -61,7 +61,7 @@ class BlockDecoder(object):
     if 's' not in options or len(options['s']) != 2:
       raise ValueError('Strides options should be a pair of integers.')
 
-    return efficientnet_model.BlockArgs(
+    return efnet_model.BlockArgs(
         kernel_size=int(options['k']),
         num_repeat=int(options['r']),
         input_filters=int(options['i']),
@@ -129,7 +129,7 @@ def efficientnet(width_coefficient=None,
       'r3_k5_s11_e6_i80_o112_se0.25', 'r4_k5_s22_e6_i112_o192_se0.25',
       'r1_k3_s11_e6_i192_o320_se0.25',
   ]
-  global_params = efficientnet_model.GlobalParams(
+  global_params = efnet_model.GlobalParams(
       batch_norm_momentum=0.99,
       batch_norm_epsilon=1e-3,
       dropout_rate=dropout_rate,
@@ -205,7 +205,7 @@ def build_model(images,
         f.write('blocks_args= %s\n\n' % str(blocks_args))
 
   with tf.variable_scope(model_name):
-    model = efficientnet_model.Model(mask, blocks_args, global_params)
+    model = efnet_model.Model(mask, blocks_args, global_params)
     logits = model(images, training=training)
 
   logits = tf.identity(logits, 'logits')
@@ -234,7 +234,7 @@ def build_model_base(images, model_name, training, override_params=None):
   blocks_args, global_params = get_model_params(model_name, override_params)
 
   with tf.variable_scope(model_name):
-    model = efficientnet_model.Model(blocks_args, global_params)
+    model = efnet_model.Model(blocks_args, global_params)
     features = model(images, training=training, features_only=True)
 
   features = tf.identity(features, 'features')

@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import micronet.dataset.imagenet as imagenet_ds
 import micronet.experiments.sequential_pool.efficientnet_builder as efnet_builder
+import micronet.experiments.sequential_pool.efficientnet_utils as efnet_utils
 MASK_WIDTH = 7
 MASK_HEIGHT = 7
 NUM_PIXELS = MASK_WIDTH * MASK_HEIGHT
@@ -10,13 +11,10 @@ STOP_ACTION = NUM_ACTIONS - 1
 SUCCESS_ACCURACY = 0.76
 SUCCESS_REWARD = 100
 BEST_EFFORT_REWARD = 50
-DISCOUNT_RATE = 0.95
+DISCOUNT_RATE = 0.96
 ALPHA = 0.2
 IMAGE_SHAPE = (224, 224, 3)
 ENCODED_STATE_SHAPE = [7] # 4 for MaskEncoding, 3 for PoolEncoding.
-b0_path = '/home/k/Sync/micronet/resources/efficientnet-b0/'
-b0_meta_path = b0_path + 'model.ckpt.meta'
-imported_effnet = tf.train.import_meta_graph(b0_meta_path)
 
 
 def action_coords(idx_):
@@ -205,35 +203,41 @@ def action_value_model(scope_name='action_value'):
         l = tf.keras.layers
         inputs = tf.keras.Input(shape=(None, *ENCODED_STATE_SHAPE))
         # TODO: do we need a stop gradient on 'state'?
-        initializer = tf.keras.initializers.Zeros()
         x = l.Dense(64,
-                    activation='relu',
-                    kernel_initializer=initializer,
-                    bias_initializer=initializer)(inputs)
+                    activation='relu')(inputs)
         # TODO: use the layer_norm?
         # x = tf.contrib.layers.layer_norm(x, center=True, scale=True)
         x = l.Dense(64,
-                    activation='relu',
-                    kernel_initializer=initializer,
-                    bias_initializer=initializer)(x)
+                    activation='relu')(x)
         # x = tf.contrib.layers.layer_norm(x, center=True, scale=True)
         x = l.Dense(NUM_ACTIONS,
-                    activation=None,
-                    kernel_initializer=initializer,
-                    bias_initializer=initializer)(x)
+                    activation=None)(x)
         model = tf.keras.Model(inputs=inputs, outputs=x)
     return model
 
 
 def state_net(image, mask):
+    def normalize_features(features, mean_rgb, stddev_rgb):
+        """Normalize the image given the means and stddevs."""
+        # TODO: support GPU by using shape=[3, 1, 1]
+        features -= tf.constant(mean_rgb, shape=[1, 1, 3],
+                                dtype=features.dtype)
+        features /= tf.constant(stddev_rgb, shape=[1, 1, 3],
+                                dtype=features.dtype)
+        return features
+    normalized_image = normalize_features(image,
+                                          efnet_builder.MEAN_RGB,
+                                          efnet_builder.STDDEV_RGB)
     logits, endpoints = efnet_builder.build_model(
-        image, model_name='efficientnet-b0', mask=mask, training=False)
+        normalized_image, model_name='efficientnet-b0', mask=mask,
+        training=False)
     prediction = tf.argmax(logits, axis=1)
     pool_outputs = endpoints['global_pool']
     mask_state = MaskEncoding.encode_net(mask)
     pool_state = PoolEncoding.encode_net(pool_outputs)
+    # import pdb;pdb.set_trace()
     state = tf.concat([mask_state, pool_state], axis=1)
-    return state, prediction
+    return state, prediction, logits
 
 
 def accuracy(mask, num_images=2**(10+10+10)):
@@ -298,6 +302,20 @@ def policy_net(action_values, current_mask):
     return action
 
 
+def start_policy(start_action_values):
+    max = np.NINF
+    max_actions = []
+    for a, val in enumerate(start_action_values):
+        if val > max:
+            max = val
+            max_actions = [a]
+        elif val == max:
+            max_actions.append(a)
+    assert len(max_actions)
+    rand_action_idx = np.random.randint(0, len(max_actions), dtype=np.int32)
+    return max_actions[rand_action_idx]
+
+
 def policy(action_values, current_mask):
     # Only works with batch_size 1, currently.
     assert action_values.shape[0] == 1
@@ -318,38 +336,51 @@ def policy(action_values, current_mask):
         # action = action[0]
         action_values = action_values[0]
         max_val = np.NINF
-        action = -1
+        actions = []
         for a, val in enumerate(action_values):
             if val > max_val and action_available(a):
                 max_val = val
-                action = a
-        assert action >= 0
+                actions = [a]
+            elif val == max_val and action_available(a):
+                actions.append(a)
+        assert len(actions)
+        rand_action_idx = np.random.randint(0, len(actions), dtype=np.int32) # What dtype?
+        action = actions[rand_action_idx]
         assert action_available(action)
     return action
 
 
-def sarsa2():
-    num_episodes = 10*1000
-    batch_size = 1
-    start_state_action_values = [0] * 50
-    image_fn = imagenet_ds.create_train_input(IMAGE_SHAPE[0],
-                                              num_parallel_calls=1,
-                                              for_tpu=False).input_fn
+def input_iterator():
+    image_fn = imagenet_ds.create_train_input(
+        IMAGE_SHAPE[0], num_parallel_calls=1).input_fn
     params = {'batch_size': 1}
     dataset = image_fn(params)
     iterator = dataset.make_one_shot_iterator()
+    return iterator
+
+saved_start_action_vals = [19.128806994560478, 17.903387234493863, 14.35500794529724, 17.629336648327637, 19.40618354039853, 15.368205760829833, 18.69720492677352, 14.712588586951826, 9.347403166732787, 15.435666945452201, 18.314733724258947, 18.88106108516228, 16.273715040664065, 20.080289216025882, 19.411999505789453, 18.451155059475795, 19.573354523760237, 16.08646622262612, 19.427368030845116, 20.568658012122118, 17.919577490273436, 19.076823942232206, 18.82401307941811, 18.30980455808352, 19.47249394411377, 18.532508752228768, 18.392759097324888, 17.795497133342387, 15.397738006417617, 19.707093322953867, 18.352668620635818, 19.43290009745056, 19.12789500386218, 17.778815246750522, 19.3061370267395, 17.43125315181191, 19.380006889667893, 6.808670120239258, 18.857488811035008, 19.45954630933901, 19.721426123732183, 18.934857486186857, 18.608201661688728, 17.24240814690105, 18.36357099050778, 19.435089573227465, 16.476550419098633, 19.02577347091082, 19.77296218548403, 0]
+
+def sarsa2():
+    num_episodes = 10*1000
+    batch_size = 1
+    # start_state_action_values = [0] * 49 (not 50, as STOP isn't a valid first action).
+    start_state_action_values = saved_start_action_vals
+    iterator = input_iterator()
     image_input, y = iterator.get_next()
     image_var = tf.Variable(
         tf.zeros((batch_size, *IMAGE_SHAPE), dtype=tf.float32),
         trainable=False)
     y_var = tf.Variable([0]*batch_size, dtype=tf.int32, trainable=False)
-    assign_image = image_var.assign(image_input)
-    assign_y = y_var.assign(y)
+    # assign_image = image_var.assign(image_input)
+    # assign_y = y_var.assign(y)
+    img_placeholder = tf.placeholder(dtype=tf.float32,
+                                      shape=(batch_size, *IMAGE_SHAPE),
+                                      name='img_placeholder')
     # State encoding
     mask_placeholder = tf.placeholder(dtype=tf.float32,
                                       shape=(batch_size, NUM_PIXELS),
                                       name='mask')
-    state, prediction = state_net(image_var, mask_placeholder)
+    state, prediction, _ = state_net(img_placeholder, mask_placeholder)
     state_placeholder = tf.placeholder(dtype=tf.float32,
                                        shape=(batch_size, *ENCODED_STATE_SHAPE))
     # This might be able to be calculated at the same time as state.
@@ -360,23 +391,34 @@ def sarsa2():
     # Batch broken here.
     chosen_action_val = tf.gather(tf.gather(action_vals, 0), action_placeholder)
     dQdW = tf.gradients(chosen_action_val, W_variables)
-    max_norm = 5
+    max_norm = 20
     dQdW, _ = tf.clip_by_global_norm(dQdW, clip_norm=max_norm)
     # next_action = policy(action_val, mask_var)
+    eval_ckpt_driver = efnet_utils.EvalCkptDriver('efficientnet-b0')
     accuracy = 0
     with tf.Session() as sess:
         sess.run([tf.global_variables_initializer()])
-        imported_effnet.restore(sess, tf.train.latest_checkpoint(b0_path))
+        b0_path = '/home/k/Sync/micronet/resources/efficientnet-b0/'
+        eval_ckpt_driver.restore_model(sess, b0_path, enable_ema=True,
+                                       export_ckpt=None)
+        # Selectively initialize only the variables that yet to be initialized.
+        # yet_uninitialized = tuple(
+        #     tf.get_variable(name)
+        #     for name in sess.run(tf.report_uninitialized_variables())
+        # )
+        # sess.run(tf.initialize_variables(yet_uninitialized))
         for e in range(num_episodes):
             # Initialize image, y and calculate prediction.
             # sess.run([y_var.initializer, image_var.initializer])
-            sess.run([assign_image, assign_y])
-            # initialize graph.
+            # sess.run([assign_image, assign_y])
             full_mask = np.ones((1, NUM_PIXELS))
-            y_eval, best_prediction = sess.run(
-                [y, prediction], feed_dict={mask_placeholder: full_mask})
+            y_eval, image_eval = sess.run([y, image_input])
+            best_prediction = sess.run(prediction,
+                                       feed_dict={mask_placeholder: full_mask,
+                                       img_placeholder: image_eval})
             mask = np.zeros((1, NUM_PIXELS), dtype=np.int8)
-            A = np.random.randint(0, NUM_PIXELS, dtype=np.int8)
+            # A = np.random.randint(0, NUM_PIXELS, dtype=np.int8)
+            A = start_policy(start_state_action_values)
             finished = False
             first_loop = True
             S = None
@@ -387,7 +429,8 @@ def sarsa2():
                     mask[0, A] = 1
                 S_next, prediction_val, W_current = \
                     sess.run([state, prediction, W_variables],
-                             feed_dict={mask_placeholder: mask})
+                             feed_dict={mask_placeholder: mask,
+                                        img_placeholder: image_eval})
                 # Observe reward
                 if finished:
                     if prediction_val == y_eval:
@@ -397,7 +440,7 @@ def sarsa2():
                     else:
                         reward = 0
                     # Log accuracy
-                    sample = int(prediction == y_eval)
+                    sample = int(prediction_val == y_eval)
                     accuracy = accuracy + 0.01 * (sample - accuracy)
                     action_count = np.sum(mask)
                     print('({}) accuracy: {}, actions: {}'.format(
@@ -435,7 +478,10 @@ def sarsa2():
                     assign_ops = []
                     for w_var, w_cur_val, w_grad_val in \
                             zip(W_variables, W_current, dQdW_val):
-                        w_next_val = w_cur_val + ALPHA * td_error * w_grad_val
+                        # TODO: include reguralization in the graph.
+                        weight_decay = 1e-5
+                        weight_reg = weight_decay*(2*w_cur_val)
+                        w_next_val = w_cur_val + ALPHA * td_error * w_grad_val - weight_reg
                         # print(w_next_val)
                         assign_ops.append(w_var.assign(w_next_val))
                     sess.run(assign_ops)
@@ -464,12 +510,12 @@ def sarsa():
     ones_mask = np.ones((MASK_WIDTH, MASK_HEIGHT), dtype=np.int8)
     mask_var = tf.Variable(tf.ones([MASK_WIDTH, MASK_HEIGHT]))
     action_var = tf.Variable(0)
-    state, masked_predict = state_net(image_input, mask_var)
+    state, masked_predict, _ = state_net(image_input, mask_var)
     action_val = action_value_model(state)()
     next_action = policy_net(action_val, mask_var)
     # We are duplicating the efficientnet network here!
     # m = tf.stack([ones_mask, start_mask], axis=2)
-    _, best_predict = state_net(image_input, ones_mask)
+    _, best_predict, _ = state_net(image_input, ones_mask)
 
     for episode in range(num_episodes):
         # increment the image (manually)!
@@ -517,6 +563,7 @@ def sarsa():
 
 
 if __name__ == '__main__':
+    tf.logging.set_verbosity(tf.logging.INFO)
     sarsa2()
 
 

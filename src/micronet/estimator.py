@@ -238,11 +238,13 @@ def create_tpu_estimator(gcloud_settings, model_dir, model_fn,
 
 # TODO: this should use the same initialize options as the tpu
 # (except for use_tpu, I thinks that's all).
-def create_cpu_estimator(model_dir, model_fn, params=None):
+def create_cpu_estimator(model_dir, model_fn, params=None,
+                         warm_start_settings=None):
     estimator = tf.estimator.Estimator(
         model_fn=model_fn,
         model_dir=model_dir,
-        params=params)
+        params=params,
+        warm_start_from=warm_start_settings)
     return estimator
 
 

@@ -455,7 +455,7 @@ class Model(tf.keras.Model):
     else:
       self._dropout = None
 
-  def call(self, inputs, training=True, features_only=None):
+  def call(self, inputs, training=True):
     """Implementation of call().
 
     Args:
