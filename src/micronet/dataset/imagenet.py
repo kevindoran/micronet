@@ -1,6 +1,7 @@
 # FIXME 27. Use 3 splits.
 
 import efficientnet.imagenet_input
+import os
 
 
 _tf_record_dir = 'gs://micronet_bucket1/imageNet'
@@ -12,8 +13,11 @@ NUM_CLASSES = 1000
 # opposed to just holding on to the ImageNetInput's input_fn(). Why is that?
 # Is the construction resource consuming? I'll keep it the same way and return
 # an ImageNetInput object, but it's worth revisiting.
-def _create_input(image_size, is_training, num_parallel_calls, for_tpu,
-                  autoaugment):
+def _create_input(image_size, is_training, num_parallel_calls=None,
+                  for_tpu=False, autoaugment=False):
+    if not num_parallel_calls:
+        num_vcpu = os.cpu_count()
+        num_parallel_calls = num_vcpu
     use_tpu_transpose_trick = for_tpu
     # FIXME: get bfloat16 working.
     # use_bfloat16 = for_tpu
@@ -35,14 +39,14 @@ def _create_input(image_size, is_training, num_parallel_calls, for_tpu,
     return imagenet_input
 
 
-def create_train_input(image_size, num_parallel_calls, for_tpu=False,
+def create_train_input(image_size, num_parallel_calls=None, for_tpu=False,
                        autoaugment=False):
     is_training = True
-    return _create_input(image_size, is_training, num_parallel_calls, for_tpu,
-                         autoaugment)
+    return _create_input(image_size, is_training, num_parallel_calls,
+                         for_tpu, autoaugment)
 
 
-def create_eval_input(image_size, num_parallel_calls, for_tpu=False,
+def create_eval_input(image_size, num_parallel_calls=None, for_tpu=False,
                        autoaugment=False):
     is_training = False
     return _create_input(image_size, is_training, num_parallel_calls, for_tpu,

@@ -455,7 +455,7 @@ class Model(tf.keras.Model):
     else:
       self._dropout = None
 
-  def call(self, inputs, training=True):
+  def call(self, inputs, training=True, features_only=False):
     """Implementation of call().
 
     Args:
@@ -505,16 +505,17 @@ class Model(tf.keras.Model):
       outputs = self._relu_fn(
           self._bn1(self._conv_head(outputs), training=training))
       self.endpoints['expanded_features'] = outputs
-      # Reshape bx49 to bx7x7x1. Add the extra dim at the end so that the
-      # tensor is broadcast correctly to all the channels when multiplying.
-      mask = tf.expand_dims(tf.reshape(self.mask, (-1, 7, 7)), -1)
-      outputs = outputs * mask
-      self.endpoints['masked_features'] = outputs
-      outputs = self._avg_pooling(outputs)
-      if self._dropout:
-        outputs = self._dropout(outputs, training=training)
-      self.endpoints['global_pool'] = outputs
-      if self._fc:
-        outputs = self._fc(outputs)
-      self.endpoints['head'] = outputs
+      if not features_only:
+          # Reshape bx49 to bx7x7x1. Add the extra dim at the end so that the
+          # tensor is broadcast correctly to all the channels when multiplying.
+          mask = tf.expand_dims(tf.reshape(self.mask, (-1, 7, 7)), -1)
+          outputs = outputs * mask
+          self.endpoints['masked_features'] = outputs
+          outputs = self._avg_pooling(outputs)
+          if self._dropout:
+            outputs = self._dropout(outputs, training=training)
+          self.endpoints['global_pool'] = outputs
+          if self._fc:
+            outputs = self._fc(outputs)
+          self.endpoints['head'] = outputs
       return outputs

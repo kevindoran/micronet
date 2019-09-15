@@ -1,9 +1,9 @@
 import numpy as np
 import tensorflow as tf
 import micronet.dataset.imagenet as imagenet_ds
-import micronet.experiments.sequential_pool.efficientnet_builder as efnet_builder
 import micronet.experiments.sequential_pool.efficientnet_utils as efnet_utils
-from .sequential_pool import *
+import micronet.experiments.sequential_pool.sequential_pool as seq_pool
+import micronet.experiments.sequential_pool.efficientnet_builder as efnet_builder
 
 SUCCESS_ACCURACY = 0.76
 SUCCESS_REWARD = 100
@@ -11,17 +11,16 @@ BEST_EFFORT_REWARD = 50
 DISCOUNT_RATE = 0.96
 ALPHA = 0.2
 
+
 def action_coords(idx_):
-    return (idx_ / MASK_WIDTH, idx_ % MASK_WIDTH)
-
-
+    return (idx_ / seq_pool.MASK_WIDTH, idx_ % seq_pool.MASK_WIDTH)
 
 
 # def action_value_model(state, scope_name='action_value'):
 def action_value_model(scope_name='action_value'):
     with tf.variable_scope(scope_name):
         l = tf.keras.layers
-        inputs = tf.keras.Input(shape=(None, *ENCODED_STATE_SHAPE))
+        inputs = tf.keras.Input(shape=(None, *seq_pool.ENCODED_STATE_SHAPE))
         # TODO: do we need a stop gradient on 'state'?
         x = l.Dense(64,
                     activation='relu')(inputs)
@@ -30,34 +29,10 @@ def action_value_model(scope_name='action_value'):
         x = l.Dense(64,
                     activation='relu')(x)
         # x = tf.contrib.layers.layer_norm(x, center=True, scale=True)
-        x = l.Dense(NUM_ACTIONS,
+        x = l.Dense(seq_pool.NUM_ACTIONS,
                     activation=None)(x)
         model = tf.keras.Model(inputs=inputs, outputs=x)
     return model
-
-
-def state_net(image, mask):
-    def normalize_features(features, mean_rgb, stddev_rgb):
-        """Normalize the image given the means and stddevs."""
-        # TODO: support GPU by using shape=[3, 1, 1]
-        features -= tf.constant(mean_rgb, shape=[1, 1, 3],
-                                dtype=features.dtype)
-        features /= tf.constant(stddev_rgb, shape=[1, 1, 3],
-                                dtype=features.dtype)
-        return features
-    normalized_image = normalize_features(image,
-                                          efnet_builder.MEAN_RGB,
-                                          efnet_builder.STDDEV_RGB)
-    logits, endpoints = efnet_builder.build_model(
-        normalized_image, model_name='efficientnet-b0', mask=mask,
-        training=False)
-    prediction = tf.argmax(logits, axis=1)
-    pool_outputs = endpoints['global_pool']
-    mask_state = MaskEncoding.encode_net(mask)
-    pool_state = PoolEncoding.encode_net(pool_outputs)
-    # import pdb;pdb.set_trace()
-    state = tf.concat([mask_state, pool_state], axis=1)
-    return state, prediction, logits
 
 
 def accuracy(mask, num_images=2**(10+10+10)):
@@ -88,20 +63,20 @@ def value(mask) -> float:
 def random_start_mask(batch_size):
     if batch_size != 1:
         raise Exception('Batching is not yet supported.')
-    one_idx = tf.random.uniform(shape=0, minval=0, maxval=NUM_PIXELS,
+    one_idx = tf.random.uniform(shape=0, minval=0, maxval=seq_pool.NUM_PIXELS,
                                 dtype=tf.int8) # use the seed?
-    mask_flattened = tf.one_hot(indices=one_idx, depth=NUM_PIXELS, on_value=1,
-                                off_value=0, dtype=tf.int8)
+    mask_flattened = tf.one_hot(indices=one_idx, depth=seq_pool.NUM_PIXELS,
+                                on_value=1, off_value=0, dtype=tf.int8)
     # mask = tf.reshape(mask_flattened, (MASK_WIDTH, MASK_HEIGHT, batch_size))
-    mask = tf.reshape(mask_flattened, (-1, NUM_PIXELS))
+    mask = tf.reshape(mask_flattened, (-1, seq_pool.NUM_PIXELS))
     return mask, one_idx
 
 
 def random_start_mask_np(batch_size):
     if batch_size != 1:
         raise Exception('Batching is not yet supported.')
-    mask = np.zeros(NUM_PIXELS, dtype=np.int8)
-    rand_idx = np.random.randint(0, NUM_PIXELS, dtype=np.int8)
+    mask = np.zeros(seq_pool.NUM_PIXELS, dtype=np.int8)
+    rand_idx = np.random.randint(0, seq_pool.NUM_PIXELS, dtype=np.int8)
     mask[rand_idx] = 1
     # mask = np.reshape(mask, [MASK_WIDTH, MASK_HEIGHT])
     mask = np.expand_dims(mask, axis=0)
@@ -112,7 +87,8 @@ def policy_net(action_values, current_mask):
     e = np.random.ranf()
     greedy_rate = 0.95
     if e > greedy_rate:
-        action = tf.random.uniform(shape=0, minval=0, maxval=NUM_ACTIONS)
+        action = tf.random.uniform(shape=0, minval=0,
+                                   maxval=seq_pool.NUM_ACTIONS)
     else:
         allowed_actions = tf.bitwise.invert(current_mask)
         actions_with_disallowed_zeroed = action_values * allowed_actions
@@ -120,6 +96,30 @@ def policy_net(action_values, current_mask):
         # How to make this op a dependency?
         # op = tf.debugging.Assert(tf.assert_non_negative(action_values[action]))
     return action
+
+
+def state_net(image, mask):
+    def normalize_features(features, mean_rgb, stddev_rgb):
+        """Normalize the image given the means and stddevs."""
+        # TODO: support GPU by using shape=[3, 1, 1]
+        features -= tf.constant(mean_rgb, shape=[1, 1, 3],
+                                dtype=features.dtype)
+        features /= tf.constant(stddev_rgb, shape=[1, 1, 3],
+                                dtype=features.dtype)
+        return features
+    normalized_image = normalize_features(image,
+                                          efnet_builder.MEAN_RGB,
+                                          efnet_builder.STDDEV_RGB)
+    logits, endpoints = efnet_builder.build_model(
+        normalized_image, model_name='efficientnet-b0', mask=mask,
+        training=False)
+    pool_inputs = endpoints['masked_features']
+    pool_outputs = endpoints['global_pool']
+    prediction = tf.argmax(logits, axis=1)
+    mask_state = seq_pool.MaskEncoding.encode_net(mask)
+    pool_state = seq_pool.PoolEncoding.encode_net(pool_outputs)
+    state = tf.concat([mask_state, pool_state], axis=1)
+    return state, prediction, pool_inputs
 
 
 def start_policy(start_action_values):
@@ -142,11 +142,11 @@ def policy(action_values, current_mask):
     e = np.random.ranf()
     greedy_rate = 0.95
     def action_available(a):
-        return a == STOP_ACTION or not current_mask[0, a]
+        return a == seq_pool.STOP_ACTION or not current_mask[0, a]
     action = None
     if e > greedy_rate:
         while not action or action_available(action):
-            action = np.random.randint(0, NUM_ACTIONS, dtype=np.int8)
+            action = np.random.randint(0, seq_pool.NUM_ACTIONS, dtype=np.int8)
     else:
         # This won't work as we have negative values.
         # allowed_actions = np.ones(NUM_ACTIONS, dtype=np.int8)
@@ -170,14 +170,6 @@ def policy(action_values, current_mask):
     return action
 
 
-def input_iterator():
-    image_fn = imagenet_ds.create_train_input(
-        IMAGE_SHAPE[0], num_parallel_calls=1).input_fn
-    params = {'batch_size': 1}
-    dataset = image_fn(params)
-    iterator = dataset.make_one_shot_iterator()
-    return iterator
-
 saved_start_action_vals = [19.128806994560478, 17.903387234493863, 14.35500794529724, 17.629336648327637, 19.40618354039853, 15.368205760829833, 18.69720492677352, 14.712588586951826, 9.347403166732787, 15.435666945452201, 18.314733724258947, 18.88106108516228, 16.273715040664065, 20.080289216025882, 19.411999505789453, 18.451155059475795, 19.573354523760237, 16.08646622262612, 19.427368030845116, 20.568658012122118, 17.919577490273436, 19.076823942232206, 18.82401307941811, 18.30980455808352, 19.47249394411377, 18.532508752228768, 18.392759097324888, 17.795497133342387, 15.397738006417617, 19.707093322953867, 18.352668620635818, 19.43290009745056, 19.12789500386218, 17.778815246750522, 19.3061370267395, 17.43125315181191, 19.380006889667893, 6.808670120239258, 18.857488811035008, 19.45954630933901, 19.721426123732183, 18.934857486186857, 18.608201661688728, 17.24240814690105, 18.36357099050778, 19.435089573227465, 16.476550419098633, 19.02577347091082, 19.77296218548403, 0]
 
 def sarsa2():
@@ -185,24 +177,25 @@ def sarsa2():
     batch_size = 1
     # start_state_action_values = [0] * 49 (not 50, as STOP isn't a valid first action).
     start_state_action_values = saved_start_action_vals
-    iterator = input_iterator()
+    iterator = seq_pool.image_iterator()
     image_input, y = iterator.get_next()
     image_var = tf.Variable(
-        tf.zeros((batch_size, *IMAGE_SHAPE), dtype=tf.float32),
+        tf.zeros((batch_size, *seq_pool.IMAGE_SHAPE), dtype=tf.float32),
         trainable=False)
     y_var = tf.Variable([0]*batch_size, dtype=tf.int32, trainable=False)
     # assign_image = image_var.assign(image_input)
     # assign_y = y_var.assign(y)
     img_placeholder = tf.placeholder(dtype=tf.float32,
-                                      shape=(batch_size, *IMAGE_SHAPE),
+                                      shape=(batch_size, *seq_pool.IMAGE_SHAPE),
                                       name='img_placeholder')
     # State encoding
     mask_placeholder = tf.placeholder(dtype=tf.float32,
-                                      shape=(batch_size, NUM_PIXELS),
+                                      shape=(batch_size, seq_pool.NUM_PIXELS),
                                       name='mask')
     state, prediction, _ = state_net(img_placeholder, mask_placeholder)
     state_placeholder = tf.placeholder(dtype=tf.float32,
-                                       shape=(batch_size, *ENCODED_STATE_SHAPE))
+                                       shape=(batch_size,
+                                              *seq_pool.ENCODED_STATE_SHAPE))
     # This might be able to be calculated at the same time as state.
     trainable_scope = 'action_value_fn'
     action_vals = action_value_model(scope_name=trainable_scope)(state_placeholder)
@@ -231,19 +224,19 @@ def sarsa2():
             # Initialize image, y and calculate prediction.
             # sess.run([y_var.initializer, image_var.initializer])
             # sess.run([assign_image, assign_y])
-            full_mask = np.ones((1, NUM_PIXELS))
+            full_mask = np.ones((1, seq_pool.NUM_PIXELS))
             y_eval, image_eval = sess.run([y, image_input])
             best_prediction = sess.run(prediction,
                                        feed_dict={mask_placeholder: full_mask,
                                        img_placeholder: image_eval})
-            mask = np.zeros((1, NUM_PIXELS), dtype=np.int8)
+            mask = np.zeros((1, seq_pool.NUM_PIXELS), dtype=np.int8)
             # A = np.random.randint(0, NUM_PIXELS, dtype=np.int8)
             A = start_policy(start_state_action_values)
             finished = False
             first_loop = True
             S = None
             while not finished:
-                if A == STOP_ACTION:
+                if A == seq_pool.STOP_ACTION:
                     finished = True
                 else:
                     mask[0, A] = 1
@@ -327,8 +320,9 @@ def sarsa():
     iterator = dataset.make_one_shot_iterator()
     image_input, y = iterator.get_next()
     start_mask, start_idx = random_start_mask(batch_size)
-    ones_mask = np.ones((MASK_WIDTH, MASK_HEIGHT), dtype=np.int8)
-    mask_var = tf.Variable(tf.ones([MASK_WIDTH, MASK_HEIGHT]))
+    ones_mask = np.ones((seq_pool.MASK_WIDTH, seq_pool.MASK_HEIGHT),
+                        dtype=np.int8)
+    mask_var = tf.Variable(tf.ones([seq_pool.MASK_WIDTH, seq_pool.MASK_HEIGHT]))
     action_var = tf.Variable(0)
     state, masked_predict, _ = state_net(image_input, mask_var)
     action_val = action_value_model(state)()
@@ -351,8 +345,8 @@ def sarsa():
             next_action_val_evaluated, mask_evaluated, best_predict_evaluated, \
             masked_predict_evaluated = sess.run([next_action,
                  state, action_val, start_mask, best_predict, masked_predict])
-            assert 0 <= next_action_evaluated < NUM_ACTIONS
-            is_terminal = next_action_evaluated == STOP_ACTION
+            assert 0 <= next_action_evaluated < seq_pool.NUM_ACTIONS
+            is_terminal = next_action_evaluated == seq_pool.STOP_ACTION
             # The calculation of the reward could be put in the graph.
             gradient = calc_gradients()
             if is_terminal:

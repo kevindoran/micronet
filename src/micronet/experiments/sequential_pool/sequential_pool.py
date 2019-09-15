@@ -1,5 +1,8 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+import micronet.dataset.imagenet as imagenet_ds
+import micronet.experiments.sequential_pool.efficientnet_builder as efnet_builder
+import micronet.experiments.sequential_pool.efficientnet_model as efnet_model
 
 MASK_WIDTH = 7
 MASK_HEIGHT = 7
@@ -159,6 +162,7 @@ class MaskEncoding:
     @classmethod
     def encode_net(cls, mask):
         # square_mask = tf.reshape(mask, (-1, 7, 7))
+        mask = tf.to_float(mask)
         flattened_buckets = np.reshape(cls.buckets, (3, NUM_PIXELS))
         right_count = tf.math.reduce_sum(
             mask * flattened_buckets[cls.right_idx], axis=[1])
@@ -177,7 +181,7 @@ class PoolEncoding:
     def encode_net(pool_output):
         """
 
-        :param pool_output: 320xb tensor.
+        :param pool_output: bx1280 tensor.
         :return: 3xb tensor (average, total, SD).
         """
         abs_pool = tf.abs(pool_output)
@@ -189,3 +193,33 @@ class PoolEncoding:
         # previously, all were (batch,), after we want (batch, 3)
         state = tf.stack((sum, mean, sd), axis=1)
         return state
+
+
+def image_iterator(batch_size=1):
+    image_fn = imagenet_ds.create_train_input(IMAGE_SHAPE[0]).input_fn
+    params = {'batch_size': batch_size}
+    dataset = image_fn(params)
+    iterator = dataset.make_one_shot_iterator()
+    return iterator
+
+
+def efficientnet_until_pool(image):
+    def normalize_features(img, mean_rgb, stddev_rgb):
+        """Normalize the image given the means and stddevs."""
+        # TODO: support GPU by using shape=[3, 1, 1]
+        img -= tf.constant(mean_rgb, shape=[1, 1, 3],
+                           dtype=img.dtype)
+        img /= tf.constant(stddev_rgb, shape=[1, 1, 3],
+                           dtype=img.dtype)
+        return img
+    normalized_image = normalize_features(image,
+                                          efnet_builder.MEAN_RGB,
+                                          efnet_builder.STDDEV_RGB)
+    blocks_args, global_params = efnet_builder.get_model_params(
+        'efficientnet-b0', override_params=None)
+    mask = None
+    model = efnet_model.Model(mask, blocks_args, global_params)
+    with tf.variable_scope('efficientnet-b0'):
+        pool_inputs = model(normalized_image, training=False,
+                            features_only=True)
+    return pool_inputs
