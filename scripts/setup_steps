@@ -106,3 +106,12 @@ jupyter labextension install @ijmbarr/jupyterlab_spellchecker
 # Install matplotlib
 pip install matplotlib
 
+
+# OpenAI Gym
+# Installation steps from:
+#   https://github.com/openai/baselines
+sudo dnf install cmake
+sudo dnf install openmpi-devel
+sudo dnf install zlib-devel
+git clone https://github.com/openai/baselines.git openai_baselines
+pip install -e ./openai_baselines
