@@ -218,8 +218,8 @@ def efficientnet_until_pool(image):
     blocks_args, global_params = efnet_builder.get_model_params(
         'efficientnet-b0', override_params=None)
     mask = None
-    model = efnet_model.Model(mask, blocks_args, global_params)
     with tf.variable_scope('efficientnet-b0'):
+        model = efnet_model.Model(mask, blocks_args, global_params)
         pool_inputs = model(normalized_image, training=False,
                             features_only=True)
     return pool_inputs

@@ -34,7 +34,7 @@ class PoolEnv(gym.Env):
     NUM_PIXELS = 7*7
     NUM_ACTIONS = NUM_PIXELS + 1
     SUCCESS_REWARD = 100.0
-    BEST_EFFORT_REWARD = 50.0
+    BEST_EFFORT_REWARD = 0.0 # 50.0
     FAILURE_REWARD = 0.0
 
     def __init__(self, tf_sess):
@@ -47,6 +47,7 @@ class PoolEnv(gym.Env):
         self._prediction_tensor = None
         self._pool_input_tensor = None
         self._pool_input_placeholder = None
+        self._create_input_net()
         self._create_model_base()
         self._create_classification_head()
         # doing it in main where we can place it last in the initialization
@@ -77,10 +78,32 @@ class PoolEnv(gym.Env):
         self.observation_space = gym.spaces.Tuple(
             (pool_output_space, mask_space))
 
+        self._accuracy_target = 0.765
+        self._step_reward = -0.65
+        self._hysteresis_count = 0
+        self._step_dir = 1
+        self._step_delta = 0.001
+
         # Stats
-        self._accuracy = 0.0
-        self._accuracy_alpha = 0.01
-        self._pixel_tally = 0
+        self._accuracy = self._accuracy_target
+        self._ave_pixels = 0.0
+        self._alpha = 0.001
+
+        self._allow_duplicate_actions = False
+
+    def _update_step_reward(self):
+        if self._accuracy <= self._accuracy_target:
+            dir_ = 1
+        else:
+            dir_ = -1
+        if dir_ == self._step_dir:
+            self._hysteresis_count += 1
+        else:
+            self._hysteresis_count = 0
+            self._step_dir = dir_
+        if self._hysteresis_count > 200:
+            self._step_reward += self._step_delta * self._step_dir
+            self._step_reward = max(-0.2, min(-2.0, self._step_reward))
 
     def reset(self):
         # Get the next image and its label.
@@ -97,44 +120,60 @@ class PoolEnv(gym.Env):
         # Reset mask.
         self._mask = np.full((sp.NUM_PIXELS, ), False)
 
-        # Reset stats
-        self._pixel_tally = 0
+        # First observation
+        pool_output = self._tf_sess.run(
+            self._pool_ouput_tensor,
+            feed_dict={self._pool_input_placeholder: self._unmasked_pool_input})
+        action_mask = np.full((sp.NUM_ACTIONS,), False)
+        # Don't allow the stop action on the first turn.
+        action_mask[self.action_space.n - 1] = True
+        obs = (pool_output, action_mask)
+        return obs
 
     def step(self, action):
         if not self.action_space.contains(action):
             raise Exception('Invalid action: {}'.format(action))
-        already_unmasked = self._mask[action]
-        if already_unmasked:
-            raise Exception('Action already taken: {}'.format(action))
-        # Update mask.
-        self._mask[action] = True
+        if action != sp.STOP_ACTION:
+            already_unmasked = self._mask[action]
+            if not self._allow_duplicate_actions and already_unmasked:
+                raise Exception('Action already taken: {}'.format(action))
+            self._mask[action] = True
         # Calculate pool output.
-        pool_input = self._unmasked_pool_input * self._mask.as_type(np.float32)
+        pool_input = self._unmasked_pool_input * np.reshape(self._mask.astype(np.float32), (7,7,1))
         pool_output = self._tf_sess.run(
             self._pool_ouput_tensor,
             feed_dict={self._pool_input_placeholder: pool_input})
-        action_mask = np.zeros(sp.NUM_ACTIONS)
+        action_mask = np.full((sp.NUM_ACTIONS,), False)
         action_mask[:-1] = self._mask
         #observations = (self._mask, pool_output)
-        observations = (action_mask, pool_output)
+        observations = (pool_output, action_mask)
         if action == sp.STOP_ACTION:
             done = True
             reward = self.calculate_reward()
-            aux_data = None
-        else:
-            done = False
-            reward = 0
             # Aux data
             correct = float(reward == self.SUCCESS_REWARD)
-            self._accuracy = self._accuracy - \
-                             self._accuracy_alpha * (correct - self._accuracy)
+            self._accuracy = self._accuracy + \
+                             self._alpha * (correct - self._accuracy)
+            pixel_count = np.sum(self._mask.astype(np.int32))
+            self._ave_pixels = self._ave_pixels + \
+                             self._alpha * (pixel_count - self._ave_pixels)
             aux_data = {'accuracy': self._accuracy,
-                        'num_eval_pixels': self._pixel_tally}
-        self._pixel_tally += 1
+                        'num_eval_pixels': pixel_count}
+        else:
+            done = False
+            reward = self._step_reward
+            aux_data = None
         return observations, reward, done, aux_data
 
+    @staticmethod
+    def _reshape_for_mask_op(mask):
+        return np.reshape(mask.astype(np.float32), (7,7,1))
+
     def calculate_reward(self):
-        pool_inputs = self._unmasked_pool_input * self._mask.as_type(np.float32)
+        if np.sum(self._mask) == 0:
+            return 0
+        pool_inputs = self._unmasked_pool_input * \
+                      self._reshape_for_mask_op(self._mask)
         prediction = self._tf_sess.run(
             [self._prediction_tensor],
             feed_dict={self._pool_input_placeholder: pool_inputs})
@@ -167,13 +206,15 @@ class PoolEnv(gym.Env):
             dtype=tf.float32,
             shape=(None, 7, 7, 1280)
         )
-        with tf.variable_scope('efficientnet-b0'):
-            with tf.variable_scope('head'):
+        #with tf.variable_scope(head_scope, auxiliary_name_scope=False) as vs:
+        #    with tf.name_scope(vs.original_name_scope):
+        # Using trailing '/' trick to prevent new scope creation.
+        with tf.name_scope('efficientnet-b0/head/'):
                 pool_ouput_tensor_full = tf.keras.layers.GlobalAveragePooling2D(
-                    data_format='channels_first')(self._pool_input_placeholder)
+                    data_format='channels_last')(self._pool_input_placeholder)
                 classes = 1000
                 self._pool_ouput_tensor = tf.squeeze(pool_ouput_tensor_full)
-                logits = tf.keras.layers.Dense(classes)(pool_ouput_tensor_full)
+                logits = tf.keras.layers.Dense(classes, name='dense')(pool_ouput_tensor_full)
                 assert len(logits.shape) == 2
                 assert logits.shape[1] == classes
                 self._prediction_tensor = tf.arg_max(logits, 1)
@@ -181,6 +222,6 @@ class PoolEnv(gym.Env):
 
     def load_weights(self):
         eval_ckpt_driver = efnet_utils.EvalCkptDriver('efficientnet-b0')
-        b0_path = '/home/k/Sync/micronet/resources/efficientnet-b0/'
+        b0_path = './resources/efficientnet-b0/'
         eval_ckpt_driver.restore_model(self._tf_sess, b0_path, enable_ema=True,
                                        export_ckpt=None)
