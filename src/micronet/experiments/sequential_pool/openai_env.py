@@ -3,36 +3,72 @@ import numpy as np
 import micronet.experiments.sequential_pool.sequential_pool as sp
 import micronet.experiments.sequential_pool.efficientnet_utils as efnet_utils
 import tensorflow as tf
+import random
 
+
+class RandomPixelOrder:
+
+    def __iter__(self):
+        self._ordered_indices = list(range(0, sp.NUM_PIXELS))
+        random.shuffle(self._ordered_indices)
+        return iter(self._ordered_indices)
+
+    def __next__(self):
+        raise NotImplemented
+
+
+class SpreadPixelOrder:
+    ORDER_MAP = np.array(
+        [
+            [9,  36, 47, 13, 34, 19, 11],
+            [42,  5, 17, 25, 38,  7, 45],
+            [28, 44,  1, 29,  3, 46, 33],
+            [16, 24, 21,  0, 31, 23, 15],
+            [32, 39,  4, 30,  2, 43, 27],
+            [48,  8, 37, 26, 18,  6, 40],
+            [12, 20, 35, 14, 41, 22, 10]
+        ])
+
+    def __iter__(self):
+        self._i = 0
+        _, self.ordered_indexes = zip(*sorted([(val, idx) for idx, val in
+                                      np.ndenumerate(self.ORDER_MAP)]))
+        return self
+
+    @staticmethod
+    def _coord_to__index(x, y):
+        return x + y * sp.MASK_WIDTH
+
+    def __next__(self):
+        if self._i >= len(self.ordered_indexes):
+            raise StopIteration
+        res = self._coord_to__index(*self.ordered_indexes[self._i])
+        self._i += 1
+        return res
 
 class PoolEnv(gym.Env):
     """Efficientnet pool layer evaluation order enviroment.
 
     Observations:
-        * current pool evaluations, 2^(7x7) possible states encoded into 4
-          integers.
+        * num of pixels evaluated so far (int).
         * a few summaries of pool output activations:
             * sum
             * mean
             * SD
 
     Actions:
-        * 0-49, representing adding the chosen pixel to the current evaluation
-          mask. Where the mask represents pixels that _are_ evaluated.
-        * 50, meaning that agent chooses to use the current mask to estimate
-          the image classification.
+        * 0- evaluate another pixel (the enviroment is configured with an
+                evaluation order).
+        * 1- classify and end episode.
 
     Rewards:
         * 100 if the classify action is taken and the classification is correct.
-        * 50 if the classify action is taken and the classification is incorrect
-          but equal to the best guess (guess given all pixels are used).
         * 0 otherwise.
-
-    The episode terminates if the classify action is taken (50).
     """
 
     NUM_PIXELS = 7*7
-    NUM_ACTIONS = NUM_PIXELS + 1
+    NUM_ACTIONS = 2 # eval or classify
+    STOP_ACTION = 1
     SUCCESS_REWARD = 100.0
     BEST_EFFORT_REWARD = 0.0 # 50.0
     FAILURE_REWARD = 0.0
@@ -59,51 +95,32 @@ class PoolEnv(gym.Env):
         self._mask = None
         self._best_prediction = None
         self._unmasked_pool_input = None
+        # self._pixel_order = SpreadPixelOrder()
+        self._pixel_order = RandomPixelOrder()
+        self._pixel_iter = None
 
         self.action_space = gym.spaces.Discrete(self.NUM_ACTIONS)
-        # high = np.array([
-        #     sp.MaskEncoding.max_bottom,
-        #     sp.MaskEncoding.max_right,
-        #     sp.MaskEncoding.max_center,
-        #     sp.MaskEncoding.max_count,
-        #     np.finfo(np.float32).max, # sum
-        #     np.finfo(np.float32).max, # mean
-        #     np.finfo(np.float32).max  # SD
-        # ])
-        # self.observation_space = gym.spaces.Box(-high, high, dtype=np.float32)
-        # encoded state
-        pool_output_space = gym.spaces.Box(low=-np.inf, high=np.inf,
-                                           shape=(1280,), dtype=np.float32)
-        mask_space = gym.spaces.MultiBinary(n=sp.NUM_ACTIONS)
-        self.observation_space = gym.spaces.Tuple(
-            (pool_output_space, mask_space))
+        bounds_low = np.array([0, *([-np.inf] * 1280)])
+        bounds_high = np.array([sp.NUM_PIXELS, *([np.inf]* 1280)])
+        # First element is the number of pixels evaluated.
+        # We can't use a tuple space, as they are not supported by the
+        # deepq algorithm as implemented by openai, and I want to stick with
+        # the standard implementation this time.
+        self.observation_space = gym.spaces.Box(low=bounds_low,
+                                                high=bounds_high,
+                                                dtype=np.float32)
+        self._last_observation = None
 
         self._accuracy_target = 0.765
-        self._step_reward = -0.65
-        self._hysteresis_count = 0
-        self._step_dir = 1
-        self._step_delta = 0.001
+        self._step_reward = -1.5
 
         # Stats
         self._accuracy = self._accuracy_target
         self._ave_pixels = 0.0
         self._alpha = 0.001
-
-        self._allow_duplicate_actions = False
-
-    def _update_step_reward(self):
-        if self._accuracy <= self._accuracy_target:
-            dir_ = 1
-        else:
-            dir_ = -1
-        if dir_ == self._step_dir:
-            self._hysteresis_count += 1
-        else:
-            self._hysteresis_count = 0
-            self._step_dir = dir_
-        if self._hysteresis_count > 200:
-            self._step_reward += self._step_delta * self._step_dir
-            self._step_reward = max(-0.2, min(-2.0, self._step_reward))
+        self._actions_so_far = 0
+        self.best_effort_accuracy = 0.80
+        self.best_effort_accuracy_lower_bound = 0.4
 
     def reset(self):
         # Get the next image and its label.
@@ -117,37 +134,40 @@ class PoolEnv(gym.Env):
             self._prediction_tensor,
             feed_dict={self._pool_input_placeholder: self._unmasked_pool_input})
 
+        # Keep track of the best-effort accuracy so that we can add some sanity
+        # checks to insure the classification net is correctly initialized.
+        is_best_effort_correct = self._best_prediction == self._label
+        self.best_effort_accuracy = \
+            self.best_effort_accuracy + self._alpha * \
+            (int(is_best_effort_correct - self.best_effort_accuracy))
+        assert self.best_effort_accuracy > self.best_effort_accuracy_lower_bound
+
+
         # Reset mask.
         self._mask = np.full((sp.NUM_PIXELS, ), False)
 
+        # Reset pixel order.
+        self._pixel_iter = iter(self._pixel_order)
+
+        # Reset counters.
+        self._actions_so_far = 0
+
         # First observation
-        pool_output = self._tf_sess.run(
-            self._pool_ouput_tensor,
-            feed_dict={self._pool_input_placeholder: self._unmasked_pool_input})
-        action_mask = np.full((sp.NUM_ACTIONS,), False)
-        # Don't allow the stop action on the first turn.
-        action_mask[self.action_space.n - 1] = True
-        obs = (pool_output, action_mask)
+        obs = self._observation(self._unmasked_pool_input)
+        self._last_observation = obs
         return obs
 
     def step(self, action):
         if not self.action_space.contains(action):
             raise Exception('Invalid action: {}'.format(action))
-        if action != sp.STOP_ACTION:
-            already_unmasked = self._mask[action]
-            if not self._allow_duplicate_actions and already_unmasked:
-                raise Exception('Action already taken: {}'.format(action))
-            self._mask[action] = True
-        # Calculate pool output.
-        pool_input = self._unmasked_pool_input * np.reshape(self._mask.astype(np.float32), (7,7,1))
-        pool_output = self._tf_sess.run(
-            self._pool_ouput_tensor,
-            feed_dict={self._pool_input_placeholder: pool_input})
-        action_mask = np.full((sp.NUM_ACTIONS,), False)
-        action_mask[:-1] = self._mask
-        #observations = (self._mask, pool_output)
-        observations = (pool_output, action_mask)
-        if action == sp.STOP_ACTION:
+        self._actions_so_far += 1
+        if action != self.STOP_ACTION:
+            next_pixel = next(self._pixel_iter)
+            assert not self._mask[next_pixel]
+            self._mask[next_pixel] = True
+        remaining_pixels = sp.NUM_PIXELS - self._actions_so_far
+        fin = remaining_pixels == 0 or action == self.STOP_ACTION
+        if fin:
             done = True
             reward = self.calculate_reward()
             # Aux data
@@ -163,15 +183,36 @@ class PoolEnv(gym.Env):
             done = False
             reward = self._step_reward
             aux_data = None
-        return observations, reward, done, aux_data
+        # Calculate pool output.
+        pool_input = self._unmasked_pool_input * \
+                     self._reshape_for_mask_op(self._mask)
+        obs = self._observation(pool_input)
+        self._last_observation = obs
+        return obs, reward, done, aux_data
+
+    def log_stats(self, logger):
+        logger.record_tabular("accuracy", self._accuracy)
+        logger.record_tabular("ave pixels", self._ave_pixels)
+        logger.record_tabular("step_reward", self._step_reward)
+
+    def _observation(self, pool_input):
+        pool_output = self._tf_sess.run(
+            self._pool_ouput_tensor,
+            feed_dict={self._pool_input_placeholder: pool_input})
+        obs = np.array([self._actions_so_far])
+        obs = np.concatenate((obs, pool_output))
+        return obs
 
     @staticmethod
     def _reshape_for_mask_op(mask):
         return np.reshape(mask.astype(np.float32), (7,7,1))
 
     def calculate_reward(self):
+        # Shortcut for the case where no pixels are evaluated before
+        # classifying. This is a degenerative case and should probably be
+        # prevented elsewhere.
         if np.sum(self._mask) == 0:
-            return 0
+            return self._step_reward
         pool_inputs = self._unmasked_pool_input * \
                       self._reshape_for_mask_op(self._mask)
         prediction = self._tf_sess.run(

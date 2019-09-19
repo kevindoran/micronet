@@ -3,15 +3,13 @@ import gym
 import micronet.experiments.sequential_pool.openai_env as seq_pool_env
 import micronet.experiments.sequential_pool.sequential_pool as seq_pool
 import micronet.experiments.sequential_pool.custom_train as custom_train
-import micronet.experiments.sequential_pool.deepq as custom_deepq
+import micronet.experiments.sequential_pool.custom_deepq as custom_deepq
 import baselines.common.tf_util as U
-import baselines.common.input
 import itertools
 import numpy as np
 import os
 
 from baselines import logger
-from baselines import deepq
 from baselines.deepq.replay_buffer import ReplayBuffer
 from baselines.deepq.utils import ObservationInput
 from baselines.common.schedules import LinearSchedule
@@ -87,6 +85,37 @@ def model(observation, mask, num_actions, scope, reuse=False):
         return av
 
 
+def run2():
+    def model(obs):
+        pool_outputs = obs[:, 1:]
+        # Expand [?], batch of scalars to [?, 1].
+        actions_so_far = tf.expand_dims(obs[:, 0], axis=1)
+        pool_state = seq_pool.PoolEncoding.encode_net(pool_outputs)
+        state = tf.concat([actions_so_far, pool_state], axis=1)
+
+        def net(inputs):
+            # TODO: do we need a stop gradient on 'state'?
+            l = tf.contrib.layers
+            x = l.fully_connected(inputs, num_outputs=64,
+                                  activation_fn=tf.nn.relu)
+            x = l.fully_connected(x, num_outputs=64,
+                                  activation_fn=tf.nn.tanh)
+            #x = tf.contrib.layers.layer_norm(x, center=True, scale=True)
+            x = l.fully_connected(x, num_outputs=64,
+                                  activation_fn=tf.nn.tanh)
+            # Why we have to hard code the action count...
+            action_count = seq_pool_env.PoolEnv.NUM_ACTIONS
+            x = l.fully_connected(x, num_outputs=action_count,
+                                  activation_fn=None)
+            return x
+
+        return net(state)
+
+    env = seq_pool_env.PoolEnv(U.get_session())
+    custom_deepq.learn(env=env, network=model, print_freq=10,
+                       exploration_fraction=0.02,
+                       total_timesteps=1000000)
+
 # Original: https://github.com/openai/baselines/blob/master/baselines/deepq/experiments/custom_cartpole.py
 # Updated to use custom build_train().
 def run1():
@@ -156,10 +185,7 @@ def run1():
                     #env._update_step_reward()
                     pass
             if done and len(episode_rewards) % 10 == 0:
-                logger.record_tabular("accuracy", env._accuracy)
-                logger.record_tabular("ave pixels", env._ave_pixels)
                 logger.record_tabular("steps", t)
-                logger.record_tabular("step_reward", env._step_reward)
                 logger.record_tabular("episodes", len(episode_rewards))
                 logger.record_tabular("mean episode reward",
                                   round(np.mean(episode_rewards[-101:-1]), 1))
@@ -169,5 +195,5 @@ def run1():
 
 
 if __name__ == '__main__':
-    run1()
+    run2()
 

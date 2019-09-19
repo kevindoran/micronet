@@ -172,7 +172,7 @@ class MaskEncoding:
             mask * flattened_buckets[cls.center_idx], axis=[1])
         total = tf.math.reduce_sum(mask, axis=[1])
         return tf.stack([right_count, bottom_count, center_count, total],
-                         axis=1)
+                        axis=1)
 
 
 class PoolEncoding:
